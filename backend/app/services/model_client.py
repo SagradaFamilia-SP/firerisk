@@ -12,11 +12,11 @@ async def generate_chat_completion(
     max_tokens: int = 700,
     timeout: float = 15.0,
 ) -> str | None:
-    """Asks the configured OpenAI-compatible model for a completion.
+    """Asks the configured OpenAI-compatible models for a completion.
 
-    Returns None on any failure (offline model, bad response shape, timeout)
+    Returns None on any failure (offline models, bad response shape, timeout)
     so callers can fall back to a deterministic reply instead of surfacing
-    an error for what is, from the model's point of view, an optional
+    an error for what is, from the models's point of view, an optional
     narrative layer over already-computed data.
     """
     try:
@@ -24,7 +24,7 @@ async def generate_chat_completion(
             response = await client.post(
                 f"{settings.model_base_url}/chat/completions",
                 json={
-                    "model": settings.model_id,
+                    "models": settings.model_id,
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,

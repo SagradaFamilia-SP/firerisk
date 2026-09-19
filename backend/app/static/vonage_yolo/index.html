@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vonage connected streaming → YOLO</title>
+  <script src="https://static.opentok.com/v2/js/opentok.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      max-width: 1400px;
+      margin: 24px auto;
+      padding: 0 18px 40px;
+      background: #0b0d10;
+      color: #f3f4f6;
+    }
+    h1 { margin-bottom: 8px; }
+    h3 { margin: 0 0 10px; }
+    p { color: #aeb4bf; }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin: 20px 0;
+      padding: 14px;
+      border: 1px solid #2a3039;
+      border-radius: 12px;
+      background: #12161c;
+    }
+    select, input, button {
+      min-height: 42px;
+      border-radius: 8px;
+      border: 1px solid #39414d;
+      background: #181d24;
+      color: #f3f4f6;
+      padding: 8px 11px;
+      font-size: 15px;
+    }
+    button { cursor: pointer; font-weight: 650; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .panel {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid #2a3039;
+      border-radius: 12px;
+      background: #12161c;
+    }
+    video, iframe {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #050607;
+      border: 0;
+      border-radius: 9px;
+      object-fit: contain;
+    }
+    iframe { overflow: hidden; }
+    .status {
+      font-weight: 750;
+      color: #d9e4ff;
+    }
+    .hint {
+      font-size: 13px;
+      color: #8d97a5;
+    }
+    pre {
+      background: #090b0e;
+      color: #d7dde6;
+      border: 1px solid #252a32;
+      padding: 14px;
+      border-radius: 10px;
+      overflow: auto;
+      min-height: 140px;
+      white-space: pre-wrap;
+    }
+    #debug { min-height: 100px; }
+    #publishCanvas { display: none; }
+    .hidden { display: none !important; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Vonage connected streaming</h1>
+  <p>
+    Pipeline operacional MP4 demo -> Vonage -> YOLO. El vídeo foc.mp4 simula
+    una cámara real time y YOLO analiza únicamente el stream que vuelve desde
+    el subscriber de Vonage.
+  </p>
+
+  <div class="toolbar">
+    <label>
+      Fuente:
+      <select id="sourceMode">
+        <option value="mp4">MP4 (demo)</option>
+        <option value="webcam">Webcam (live)</option>
+      </select>
+    </label>
+
+    <input id="file" type="file" accept="video/*" />
+
+    <button id="start" type="button">Start → Vonage → YOLO</button>
+    <button id="stop" type="button" disabled>Stop</button>
+
+    <span id="status" class="status">Vonage connected streaming listo</span>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <h3 id="sourceTitle">1. Fuente MP4 demo</h3>
+      <video id="source" muted playsinline controls loop></video>
+      <p class="hint">
+        Esta imagen es solo la fuente. YOLO no procesa este elemento directamente.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h3>2. Stream recibido desde Vonage + boxes YOLO</h3>
+      <iframe
+          id="subscriberFrame"
+          src="/api/video/subscriber?v=overlay4"
+          allow="autoplay; camera"
+      ></iframe>
+      <p class="hint">
+        Las cajas se dibujan sobre el vídeo recibido del subscriber.
+      </p>
+    </section>
+  </div>
+
+  <h3 style="margin-top:22px">3. Última inferencia YOLO</h3>
+  <pre id="detections">Sin detecciones todavía.</pre>
+
+  <h3>Debug</h3>
+  <pre id="debug">Esperando subscriber...</pre>
+
+  <canvas id="publishCanvas"></canvas>
+
+<script>
+const fileInput = document.getElementById("file");
+const sourceMode = document.getElementById("sourceMode");
+const sourceVideo = document.getElementById("source");
+const sourceTitle = document.getElementById("sourceTitle");
+const startButton = document.getElementById("start");
+const stopButton = document.getElementById("stop");
+const statusEl = document.getElementById("status");
+const detectionsEl = document.getElementById("detections");
+const debugEl = document.getElementById("debug");
+const canvas = document.getElementById("publishCanvas");
+const ctx = canvas.getContext("2d");
+
+let publisherSession = null;
+let publisher = null;
+let drawTimer = null;
+let webcamStream = null;
+let subscriberReady = false;
+let started = false;
+let sourceObjectUrl = null;
+
+function log(message) {
+  const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+  console.log(line);
+  debugEl.textContent += `\n${line}`;
+  debugEl.scrollTop = debugEl.scrollHeight;
+}
+
+function updateSourceModeUi() {
+  const webcam = sourceMode.value === "webcam";
+
+  fileInput.classList.toggle("hidden", webcam);
+  sourceVideo.controls = !webcam;
+  sourceVideo.loop = !webcam;
+
+  sourceTitle.textContent = webcam
+    ? "1. Webcam local (live)"
+    : "1. Fuente MP4 demo";
+
+  statusEl.textContent = webcam
+    ? "webcam seleccionada"
+    : "MP4 seleccionado";
+}
+
+sourceMode.addEventListener("change", () => {
+  if (started) return;
+  updateSourceModeUi();
+});
+
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+
+  if (sourceObjectUrl) URL.revokeObjectURL(sourceObjectUrl);
+  sourceObjectUrl = URL.createObjectURL(file);
+
+  sourceVideo.srcObject = null;
+  sourceVideo.src = sourceObjectUrl;
+  statusEl.textContent = "MP4 cargado";
+  log(`MP4 seleccionado: ${file.name}`);
+});
+
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin) return;
+
+  const data = event.data || {};
+
+  if (data.type === "subscriber-ready") {
+    subscriberReady = true;
+    log("✅ subscriber iframe conectado a Vonage");
+    return;
+  }
+
+  if (data.type === "subscriber-stream") {
+    log("✅ subscriber recibió el stream desde Vonage");
+    statusEl.textContent = "Vonage OK → YOLO activo";
+    return;
+  }
+
+  if (data.type === "subscriber-error") {
+    log(`❌ subscriber error: ${data.message}`);
+    statusEl.textContent = "ERROR subscriber";
+    return;
+  }
+
+  if (data.type === "yolo-result") {
+    detectionsEl.textContent = JSON.stringify(data.result, null, 2);
+
+    if (data.result?.fire_or_smoke) {
+      const targets = (data.result.detections || [])
+        .filter(d => ["fire", "smoke"].includes(String(d.class_name).toLowerCase()))
+        .map(d => `${d.class_name} ${(d.confidence * 100).toFixed(1)}%`)
+        .join(" · ");
+
+      statusEl.textContent = `🔥 ${targets || "Fire/Smoke detectado"}`;
+    } else {
+      statusEl.textContent = "Vonage + YOLO OK → sin fuego/humo";
+    }
+    return;
+  }
+
+  if (data.type === "subscriber-debug") {
+    log(`[subscriber] ${data.message}`);
+  }
+});
+
+function waitForSubscriber(timeoutMs = 15000) {
+  if (subscriberReady) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+
+    const timer = setInterval(() => {
+      if (subscriberReady) {
+        clearInterval(timer);
+        resolve();
+      } else if (Date.now() - startedAt > timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("El subscriber iframe no conectó a Vonage a tiempo."));
+      }
+    }, 100);
+  });
+}
+
+function connectSession(session, token) {
+  return new Promise((resolve, reject) => {
+    session.connect(token, error => error ? reject(error) : resolve());
+  });
+}
+
+function publishToSession(session, pub) {
+  return new Promise((resolve, reject) => {
+    session.publish(pub, error => error ? reject(error) : resolve());
+  });
+}
+
+async function waitForMetadata(video) {
+  if (video.readyState >= 1 && video.videoWidth > 0) return;
+
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Timeout esperando dimensiones del vídeo.")),
+      10000
+    );
+
+    video.addEventListener("loadedmetadata", () => {
+      clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+  });
+}
+
+async function prepareMp4() {
+  const file = fileInput.files?.[0];
+
+  if (file && !sourceVideo.src) {
+    sourceObjectUrl = URL.createObjectURL(file);
+    sourceVideo.src = sourceObjectUrl;
+  }
+
+  if (!file && !sourceVideo.src) {
+    sourceVideo.src = "/api/video/demo-source";
+  }
+
+  sourceVideo.srcObject = null;
+  sourceVideo.muted = true;
+  sourceVideo.loop = true;
+  await sourceVideo.play();
+  await waitForMetadata(sourceVideo);
+
+  log(`MP4 listo: ${sourceVideo.videoWidth}x${sourceVideo.videoHeight}`);
+}
+
+async function prepareWebcam() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Este navegador no soporta getUserMedia().");
+  }
+
+  log("Solicitando permiso de webcam...");
+
+  webcamStream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30, max: 30 },
+    },
+    audio: false,
+  });
+
+  sourceVideo.removeAttribute("src");
+  sourceVideo.srcObject = webcamStream;
+  sourceVideo.muted = true;
+  sourceVideo.controls = false;
+
+  await sourceVideo.play();
+  await waitForMetadata(sourceVideo);
+
+  log(`✅ webcam lista: ${sourceVideo.videoWidth}x${sourceVideo.videoHeight}`);
+}
+
+async function prepareSource() {
+  if (sourceMode.value === "webcam") {
+    await prepareWebcam();
+  } else {
+    await prepareMp4();
+  }
+}
+
+function createCanvasTrack() {
+  const width = sourceVideo.videoWidth || 1280;
+  const height = sourceVideo.videoHeight || 720;
+
+  canvas.width = width;
+  canvas.height = height;
+
+  if (drawTimer) clearInterval(drawTimer);
+
+  const targetFps = 25;
+
+  drawTimer = setInterval(() => {
+    if (sourceVideo.readyState >= 2) {
+      ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+    }
+  }, 1000 / targetFps);
+
+  const canvasStream = canvas.captureStream(targetFps);
+  const track = canvasStream.getVideoTracks()[0];
+
+  if (!track) throw new Error("No se pudo crear el MediaStreamTrack.");
+
+  return track;
+}
+
+async function startDemo() {
+  if (started) return;
+
+  started = true;
+  startButton.disabled = true;
+  stopButton.disabled = false;
+  sourceMode.disabled = true;
+  fileInput.disabled = true;
+  debugEl.textContent = "";
+  detectionsEl.textContent = "Esperando primera inferencia...";
+  statusEl.textContent = "conectando...";
+
+  try {
+    log("Esperando subscriber iframe...");
+    await waitForSubscriber();
+
+    await prepareSource();
+
+    log("Pidiendo credenciales publisher...");
+    const response = await fetch("/api/video/credentials");
+    const creds = await response.json();
+
+    if (!response.ok) {
+      throw new Error(creds.detail || "Error obteniendo credenciales.");
+    }
+
+    publisherSession = OT.initSession(
+      creds.application_id,
+      creds.session_id
+    );
+
+    publisherSession.on("sessionDisconnected", event => {
+      log(`publisher disconnected: ${event.reason}`);
+    });
+
+    publisherSession.on("exception", event => {
+      log(`publisher exception: ${event.message || event}`);
+    });
+
+    log("Conectando publisher a Vonage...");
+    await connectSession(
+      publisherSession,
+      creds.publisher_token
+    );
+    log("✅ publisher conectado");
+
+    const videoTrack = createCanvasTrack();
+    log(`Canvas MediaStreamTrack: ${videoTrack.readyState}`);
+
+    publisher = OT.initPublisher(
+      null,
+      {
+        videoSource: videoTrack,
+        audioSource: null,
+        publishAudio: false,
+        publishVideo: true,
+        name: sourceMode.value === "webcam"
+          ? "fire-demo-webcam"
+          : "fire-demo-mp4",
+        insertDefaultUI: false,
+      },
+      error => {
+        if (error) log(`initPublisher error: ${error.message}`);
+        else log("✅ publisher inicializado");
+      }
+    );
+
+    log("Publicando en Vonage...");
+    await publishToSession(publisherSession, publisher);
+
+    log("🔥 stream publicado en Vonage");
+    statusEl.textContent = "Publicado → esperando subscriber/YOLO";
+
+  } catch (error) {
+    console.error(error);
+    log(`💥 ERROR: ${error.message || error}`);
+    statusEl.textContent = `ERROR: ${error.message || error}`;
+    stopDemo();
+  }
+}
+
+function stopDemo() {
+  if (drawTimer) {
+    clearInterval(drawTimer);
+    drawTimer = null;
+  }
+
+  try {
+    if (publisherSession && publisher) {
+      publisherSession.unpublish(publisher);
+    }
+  } catch (_) {}
+
+  try {
+    publisher?.destroy();
+  } catch (_) {}
+
+  try {
+    publisherSession?.disconnect();
+  } catch (_) {}
+
+  publisher = null;
+  publisherSession = null;
+
+  if (webcamStream) {
+    for (const track of webcamStream.getTracks()) {
+      track.stop();
+    }
+    webcamStream = null;
+  }
+
+  sourceVideo.pause();
+
+  if (sourceMode.value === "webcam") {
+    sourceVideo.srcObject = null;
+  }
+
+  started = false;
+  startButton.disabled = false;
+  stopButton.disabled = true;
+  sourceMode.disabled = false;
+  fileInput.disabled = sourceMode.value === "webcam";
+
+  statusEl.textContent = "parado";
+  log("⏹ demo detenida");
+}
+
+startButton.addEventListener("click", startDemo);
+stopButton.addEventListener("click", stopDemo);
+
+updateSourceModeUi();
+</script>
+</body>
+</html>

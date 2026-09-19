@@ -7,6 +7,7 @@ import { FireRiskMap } from './FireRiskMap';
 import { ForecastTimeline } from './ForecastTimeline';
 import { MapToolbar } from './MapToolbar';
 import { sampleFiresForRender } from './sampleFires';
+import { VonageYoloStreamButton } from './VonageYoloStreamModal';
 
 type Dashboard = ReturnType<typeof useDashboard>;
 
@@ -14,6 +15,9 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: 
   const [centerKey, setCenterKey] = useState(0);
   const [view, setView] = useState<'site' | 'global'>('global');
   const [timelinePlaying, setTimelinePlaying] = useState(false);
+  const [streamOpen, setStreamOpen] = useState(false);
+  const hasSelectedFire = Boolean(liveFires.selectedFireId);
+
   return (
     <div className="map-workspace">
       <FireRiskMap
@@ -34,6 +38,13 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: 
         onCenter={() => { setView('site'); setCenterKey((key) => key + 1); }}
         onGlobal={() => { setView('global'); setCenterKey((key) => key + 1); }}
       />
+      {hasSelectedFire && (
+        <VonageYoloStreamButton
+          open={streamOpen}
+          onOpen={() => setStreamOpen(true)}
+          onClose={() => setStreamOpen(false)}
+        />
+      )}
       {fireSpread.data && <ForecastTimeline hour={fireSpread.hour} onChange={fireSpread.setHour} onPlayingChange={setTimelinePlaying} />}
       {fireSpread.status === 'loading' && <span className="map-updating">Calculando propagación…</span>}
     </div>

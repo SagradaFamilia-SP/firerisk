@@ -23,7 +23,7 @@ class ChatSummary(BaseModel):
     confidence_counts: dict[FireConfidence, int]
     max_frp: float | None
     generated_at: datetime
-    narrative_source: Literal["model", "fallback", "unconfigured"]
+    narrative_source: Literal["models", "fallback", "unconfigured"]
 
 
 class ChatResponse(BaseModel):

@@ -12,6 +12,10 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
+export function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -20,7 +24,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });

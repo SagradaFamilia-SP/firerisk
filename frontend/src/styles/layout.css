@@ -76,6 +76,9 @@
   .map-toolbar__group:first-child .map-action:nth-child(2) { font-size: 0; width: 42px; }
   .map-toolbar__group:first-child .map-action:nth-child(2) svg { margin: 0; }
   .map-switch { display: none !important; }
+  .vonage-stream-trigger { top: 58px !important; right: 10px !important; }
+  .vonage-stream-modal { padding: 10px !important; }
+  .vonage-stream-modal__panel { width: 100% !important; height: 92vh !important; }
   .forecast { width: calc(100% - 20px) !important; bottom: 18px !important; transform: translateX(-50%); }
   .risk-legend { display: none; }
 }

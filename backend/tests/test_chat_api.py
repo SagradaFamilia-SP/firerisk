@@ -46,7 +46,7 @@ class FakeFirmsService:
 def _override(detections: list[FireDetection]) -> None:
     app.dependency_overrides[get_firms_service] = lambda: FakeFirmsService(detections)
     app.dependency_overrides[get_settings] = lambda: Settings(
-        model_base_url="http://fake-model/v1", model_id="test-model"
+        model_base_url="http://fake-model/v1", model_id="test-models"
     )
 
 
@@ -105,7 +105,7 @@ def test_chat_uses_model_narrative_when_available() -> None:
         app.dependency_overrides.clear()
 
     body = response.json()
-    assert body["summary"]["narrative_source"] == "model"
+    assert body["summary"]["narrative_source"] == "models"
     assert body["reply"] == "Informe generado por el modelo."
     assert body["summary"]["region"] == "Francia"
 
@@ -117,7 +117,7 @@ def test_chat_reports_source_failure_gracefully() -> None:
 
     app.dependency_overrides[get_firms_service] = lambda: BrokenFirmsService()
     app.dependency_overrides[get_settings] = lambda: Settings(
-        model_base_url="http://fake-model/v1", model_id="test-model"
+        model_base_url="http://fake-model/v1", model_id="test-models"
     )
     try:
         with TestClient(app) as test_client:

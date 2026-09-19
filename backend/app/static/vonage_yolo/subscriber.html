@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://static.opentok.com/v2/js/opentok.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #050607;
+      overflow: hidden;
+      font-family: system-ui, sans-serif;
+    }
+
+    #stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #050607;
+      overflow: hidden;
+    }
+
+    /*
+      Vonage renders the REAL subscriber here.
+      This stays visible.
+    */
+    #subscriber {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #050607;
+    }
+
+    #subscriber > div,
+    #subscriber video {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #subscriber video {
+      object-fit: contain !important;
+      background: #050607;
+    }
+
+    /*
+      Transparent canvas ONLY for YOLO boxes.
+      It sits above the Vonage video.
+    */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    #label,
+    #fps {
+      position: absolute;
+      top: 8px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.72);
+      color: white;
+      font-size: 12px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      pointer-events: none;
+    }
+
+    #label { left: 8px; }
+    #fps { right: 8px; }
+
+    #inferenceCanvas {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="stage">
+    <div id="subscriber"></div>
+
+    <!-- ONLY bounding boxes are drawn here -->
+    <canvas id="overlay"></canvas>
+
+    <div id="label">subscriber conectando...</div>
+    <div id="fps">YOLO: --</div>
+  </div>
+
+  <!-- Hidden canvas used to send frames to FastAPI/YOLO -->
+  <canvas id="inferenceCanvas"></canvas>
+
+<script>
+const stage = document.getElementById("stage");
+const label = document.getElementById("label");
+const fpsLabel = document.getElementById("fps");
+
+const overlay = document.getElementById("overlay");
+const overlayCtx = overlay.getContext("2d");
+
+const inferenceCanvas = document.getElementById("inferenceCanvas");
+const inferenceCtx = inferenceCanvas.getContext("2d");
+
+let session = null;
+let remoteVideo = null;
+let detectTimer = null;
+let detectionBusy = false;
+
+let latestDetections = [];
+let latestInferenceWidth = 1;
+let latestInferenceHeight = 1;
+
+function parentMessage(type, payload = {}) {
+  window.parent.postMessage(
+    { type, ...payload },
+    window.location.origin
+  );
+}
+
+function debug(message) {
+  console.log("[subscriber]", message);
+  parentMessage("subscriber-debug", { message });
+}
+
+function connectSession(session, token) {
+  return new Promise((resolve, reject) => {
+    session.connect(token, error => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+/*
+  Resize overlay to CSS pixels.
+  Using devicePixelRatio keeps the boxes sharp.
+*/
+function resizeOverlay() {
+  const rect = stage.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+
+  const wantedWidth = Math.max(1, Math.round(rect.width * dpr));
+  const wantedHeight = Math.max(1, Math.round(rect.height * dpr));
+
+  if (overlay.width !== wantedWidth || overlay.height !== wantedHeight) {
+    overlay.width = wantedWidth;
+    overlay.height = wantedHeight;
+  }
+
+  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+/*
+  Calculate where object-fit: contain places the actual video inside
+  the stage. This matters for portrait video with black side bars.
+*/
+function getContainedVideoRect() {
+  const stageRect = stage.getBoundingClientRect();
+
+  if (!remoteVideo || !remoteVideo.videoWidth || !remoteVideo.videoHeight) {
+    return {
+      x: 0,
+      y: 0,
+      width: stageRect.width,
+      height: stageRect.height
+    };
+  }
+
+  const videoAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
+  const stageAspect = stageRect.width / stageRect.height;
+
+  let width;
+  let height;
+  let x;
+  let y;
+
+  if (videoAspect > stageAspect) {
+    width = stageRect.width;
+    height = width / videoAspect;
+    x = 0;
+    y = (stageRect.height - height) / 2;
+  } else {
+    height = stageRect.height;
+    width = height * videoAspect;
+    y = 0;
+    x = (stageRect.width - width) / 2;
+  }
+
+  return { x, y, width, height };
+}
+
+function boxColor(className) {
+  const name = String(className || "").toLowerCase();
+
+  if (name === "fire") return "#ff2d2d";
+  if (name === "smoke") return "#ffb020";
+
+  return "#39a9ff";
+}
+
+function drawDetections() {
+  resizeOverlay();
+
+  const stageRect = stage.getBoundingClientRect();
+
+  /*
+    Clear ONLY the transparent overlay.
+    The Vonage video underneath is untouched.
+  */
+  overlayCtx.clearRect(0, 0, stageRect.width, stageRect.height);
+
+  if (!latestDetections.length || !remoteVideo) {
+    return;
+  }
+
+  const videoRect = getContainedVideoRect();
+
+  const scaleX =
+    videoRect.width / Math.max(1, latestInferenceWidth);
+
+  const scaleY =
+    videoRect.height / Math.max(1, latestInferenceHeight);
+
+  for (const detection of latestDetections) {
+    if (!Array.isArray(detection.bbox) || detection.bbox.length !== 4) {
+      continue;
+    }
+
+    const [x1, y1, x2, y2] = detection.bbox;
+
+    const x = videoRect.x + x1 * scaleX;
+    const y = videoRect.y + y1 * scaleY;
+    const w = (x2 - x1) * scaleX;
+    const h = (y2 - y1) * scaleY;
+
+    const color = boxColor(detection.class_name);
+    const confidence = Number(detection.confidence || 0);
+
+    const text =
+      `${String(detection.class_name).toUpperCase()} ` +
+      `${(confidence * 100).toFixed(1)}%`;
+
+    /*
+      Thick classic YOLO bbox.
+    */
+    overlayCtx.strokeStyle = color;
+    overlayCtx.lineWidth = 2;
+    overlayCtx.strokeRect(x, y, w, h);
+
+    /*
+      YOLO label.
+    */
+    const fontSize = 14;
+    const paddingX = 7;
+    const labelHeight = 22;
+
+    overlayCtx.font = `700 ${fontSize}px system-ui`;
+    const textWidth = overlayCtx.measureText(text).width;
+
+    const labelY = Math.max(
+      videoRect.y,
+      y - labelHeight
+    );
+
+    overlayCtx.fillStyle = color;
+    overlayCtx.fillRect(
+      x,
+      labelY,
+      textWidth + paddingX * 2,
+      labelHeight
+    );
+
+    overlayCtx.fillStyle = "#ffffff";
+    overlayCtx.textBaseline = "middle";
+    overlayCtx.fillText(
+      text,
+      x + paddingX,
+      labelY + labelHeight / 2
+    );
+  }
+}
+
+async function sendFrameToYolo() {
+  if (detectionBusy || !remoteVideo) return;
+
+  if (
+    remoteVideo.readyState < 2 ||
+    !remoteVideo.videoWidth ||
+    !remoteVideo.videoHeight
+  ) {
+    return;
+  }
+
+  detectionBusy = true;
+  const startedAt = performance.now();
+
+  try {
+    const maxWidth = 960;
+
+    const scale = Math.min(
+      1,
+      maxWidth / remoteVideo.videoWidth
+    );
+
+    inferenceCanvas.width = Math.max(
+      1,
+      Math.round(remoteVideo.videoWidth * scale)
+    );
+
+    inferenceCanvas.height = Math.max(
+      1,
+      Math.round(remoteVideo.videoHeight * scale)
+    );
+
+    inferenceCtx.drawImage(
+      remoteVideo,
+      0,
+      0,
+      inferenceCanvas.width,
+      inferenceCanvas.height
+    );
+
+    const blob = await new Promise(resolve => {
+      inferenceCanvas.toBlob(
+        resolve,
+        "image/jpeg",
+        0.85
+      );
+    });
+
+    if (!blob) {
+      throw new Error("No se pudo generar JPEG para YOLO.");
+    }
+
+    const form = new FormData();
+    form.append("frame", blob, "frame.jpg");
+
+    const response = await fetch("/api/video/detect", {
+      method: "POST",
+      body: form
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.detail || "YOLO endpoint error"
+      );
+    }
+
+    latestDetections = Array.isArray(result.detections)
+      ? result.detections
+      : [];
+
+    latestInferenceWidth = Number(
+      result.image_width || inferenceCanvas.width
+    );
+
+    latestInferenceHeight = Number(
+      result.image_height || inferenceCanvas.height
+    );
+
+    /*
+      Important: draw immediately when a fresh YOLO result arrives.
+    */
+    drawDetections();
+
+    console.log(
+      "[YOLO]",
+      latestDetections
+    );
+
+    const elapsed = performance.now() - startedAt;
+
+    fpsLabel.textContent =
+      `YOLO ${(1000 / Math.max(1, elapsed)).toFixed(1)} inf/s` +
+      ` · ${latestDetections.length} boxes`;
+
+    if (result.fire_or_smoke) {
+      label.textContent = "🔥 FIRE / SMOKE";
+    } else {
+      label.textContent = "Vonage live · no fire/smoke";
+    }
+
+    parentMessage("yolo-result", { result });
+
+  } catch (error) {
+    debug(`YOLO error: ${error.message || error}`);
+    fpsLabel.textContent = "YOLO error";
+  } finally {
+    detectionBusy = false;
+  }
+}
+
+async function startSubscriber() {
+  try {
+    label.textContent = "pidiendo token...";
+
+    const response = await fetch(
+      "/api/video/credentials"
+    );
+
+    const creds = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        creds.detail ||
+        "Error obteniendo credenciales"
+      );
+    }
+
+    debug(`credential mode: ${creds.mode}`);
+
+    session = OT.initSession(
+      creds.application_id,
+      creds.session_id
+    );
+
+    session.on("streamCreated", event => {
+      debug(`streamCreated: ${event.stream.streamId}`);
+
+      label.textContent = "stream recibido";
+
+      const subscriber = session.subscribe(
+        event.stream,
+        "subscriber",
+        {
+          insertMode: "append",
+          width: "100%",
+          height: "100%",
+          showControls: false
+        },
+        error => {
+          if (error) {
+            parentMessage("subscriber-error", {
+              message: error.message || String(error)
+            });
+          } else {
+            debug("subscribe OK");
+          }
+        }
+      );
+
+      subscriber.on("videoElementCreated", event => {
+        remoteVideo = event.element;
+
+        remoteVideo.muted = true;
+        remoteVideo.playsInline = true;
+
+        /*
+          Force contain on the actual Vonage-created video.
+        */
+        remoteVideo.style.objectFit = "contain";
+        remoteVideo.style.width = "100%";
+        remoteVideo.style.height = "100%";
+
+        debug(
+          `remote video created: ` +
+          `${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`
+        );
+
+        parentMessage("subscriber-stream");
+
+        /*
+          Redraw boxes if the iframe changes size.
+        */
+        window.addEventListener("resize", drawDetections);
+
+        /*
+          ~2 YOLO inferences / second.
+        */
+        if (!detectTimer) {
+          detectTimer = setInterval(
+            sendFrameToYolo,
+            500
+          );
+        }
+      });
+    });
+
+    session.on("streamDestroyed", () => {
+      debug("remote stream destroyed");
+
+      remoteVideo = null;
+      latestDetections = [];
+
+      drawDetections();
+
+      label.textContent =
+        "conectado; esperando stream";
+    });
+
+    session.on("sessionDisconnected", event => {
+      debug(`disconnected: ${event.reason}`);
+    });
+
+    session.on("exception", event => {
+      debug(`exception: ${event.message || event}`);
+    });
+
+    label.textContent =
+      "conectando a Vonage...";
+
+    await connectSession(
+      session,
+      creds.subscriber_token
+    );
+
+    label.textContent =
+      "conectado; esperando stream";
+
+    debug("subscriber connected");
+
+    parentMessage("subscriber-ready");
+
+  } catch (error) {
+    console.error(error);
+
+    label.textContent = "ERROR";
+
+    parentMessage("subscriber-error", {
+      message: error.message || String(error)
+    });
+  }
+}
+
+startSubscriber();
+</script>
+</body>
+</html>

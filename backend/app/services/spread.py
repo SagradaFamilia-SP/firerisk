@@ -18,7 +18,7 @@ grid around the requested ignition point, sized for interactive web use:
   merge from multiple ignitions, instead of 36 independent rays.
 
 This is an experimental research/prototyping tool, not an operational
-wildfire model. It does not model crown fire, spotting/embers, fire
+wildfire models. It does not models crown fire, spotting/embers, fire
 suppression, or barriers such as roads and firebreaks, and must not be used
 for evacuation, emergency response, or life-safety decisions.
 """
@@ -169,7 +169,7 @@ def fractional_index_to_latlon(row: float, col: float, lat_grid: np.ndarray, lon
 
 @dataclass(frozen=True)
 class FuelModel:
-    """Anderson/NFFL-style fuel model in imperial units, as used by Rothermel."""
+    """Anderson/NFFL-style fuel models in imperial units, as used by Rothermel."""
 
     code: str
     name: str
@@ -192,7 +192,7 @@ FM8 = FuelModel("FM8", "Closed timber litter", 0.069, 0.046, 0.115, 2000.0, 0.2,
 def worldcover_to_fuel_model(class_code: int) -> FuelModel | None:
     """Conservative crosswalk from ESA WorldCover classes to Anderson surface fuel models."""
     code = int(class_code)
-    if code == 10:  # trees -> surface litter, not a crown-fire model
+    if code == 10:  # trees -> surface litter, not a crown-fire models
         return FM8
     if code == 20:  # shrubland
         return FM6
@@ -224,7 +224,7 @@ def fuel_load_kg_m2(fm: FuelModel) -> float:
 
     Assumes the modelled dead-fuel bed (1h+10h+100h loads) is fully consumed
     in the flaming front, the standard simplification used whenever a
-    dedicated combustion/consumption sub-model isn't available (Byram 1959,
+    dedicated combustion/consumption sub-models isn't available (Byram 1959,
     and how BehavePlus-style tools report fireline intensity by default).
     """
     total_lb_ft2 = (fm.load_1h_lb_ft2 + fm.load_10h_lb_ft2 + fm.load_100h_lb_ft2) * fm.load_scale
@@ -263,7 +263,7 @@ def estimate_dead_fuel_moisture(temp_c: float, rh_pct: float, precip_mm: float) 
 def _rothermel_components(
     fm: FuelModel, dead_moisture: float, wind_speed_m_s: float, slope_deg: float
 ) -> tuple[float, float, float]:
-    """Return R0_ft_min (no-wind/no-slope ROS), phi_w and phi_s for a dead-fuel Anderson model."""
+    """Return R0_ft_min (no-wind/no-slope ROS), phi_w and phi_s for a dead-fuel Anderson models."""
     loads = np.array(
         [fm.load_1h_lb_ft2, fm.load_10h_lb_ft2, fm.load_100h_lb_ft2], dtype=float
     ) * fm.load_scale
@@ -347,7 +347,7 @@ def directional_ros(
     phi_w and phi_s are computed physically then projected onto the requested
     spread direction via the angular alignment with the downwind/upslope
     bearings, following the same directional extension as the reference
-    grid model.
+    grid models.
     """
     if fuel_model is None:
         return 0.0
@@ -724,7 +724,7 @@ def build_snapshots(
 
     # Fireline intensity (Byram 1959: I = H * w * r) for every cell, using the
     # real ROS that actually ignited it (captured by simulate_grid) and the
-    # fuel load of its own Anderson model. Cells never reached keep ros=NaN.
+    # fuel load of its own Anderson models. Cells never reached keep ros=NaN.
     fuel_load_grid = np.zeros(fuel_models.shape, dtype=float)
     for index in np.ndindex(fuel_models.shape):
         fm = fuel_models[index]

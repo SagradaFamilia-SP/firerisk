@@ -163,7 +163,7 @@ def test_directional_ros_is_zero_for_non_burnable_fuel() -> None:
 
 
 def test_directional_ros_extinguishes_above_moisture_of_extinction() -> None:
-    soaked = 0.9  # far above any Anderson model's moisture_extinction
+    soaked = 0.9  # far above any Anderson models's moisture_extinction
     assert directional_ros(FM3, soaked, 10.0, 270.0, 0.0, 0.0, 90.0) == 0.0
 
 
@@ -230,7 +230,7 @@ def test_build_snapshots_reports_intensity_growing_with_the_active_front() -> No
 
 def test_ignition_pixel_misclassified_still_burns() -> None:
     """
-    Regression test: the reference model force-seeds the ignition cell
+    Regression test: the reference models force-seeds the ignition cell
     regardless of its own burnability, because a FIRMS detection's sensor
     footprint can legitimately land on a non-burnable WorldCover pixel
     (road/building/water) even though the real fire is in nearby vegetation.

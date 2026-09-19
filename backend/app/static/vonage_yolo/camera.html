@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vonage connected camera</title>
+  <script src="https://static.opentok.com/v2/js/opentok.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050607;
+      color: #eef3f8;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #cameraStage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #050607;
+    }
+    #subscriberFrame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #050607;
+    }
+    .camera-hud {
+      position: absolute;
+      z-index: 20;
+      left: 14px;
+      top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      max-width: calc(100% - 28px);
+      padding: 8px 10px;
+      border: 1px solid rgba(148, 163, 184, .24);
+      border-radius: 8px;
+      background: rgba(5, 8, 12, .78);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .4);
+      backdrop-filter: blur(12px);
+      pointer-events: none;
+    }
+    .camera-hud i {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #31c48d;
+      box-shadow: 0 0 12px rgba(49, 196, 141, .75);
+    }
+    .camera-hud div {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+    .camera-hud strong {
+      overflow: hidden;
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .camera-hud span {
+      overflow: hidden;
+      color: #9fd6ff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #sourceVideo,
+    #publishCanvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <main id="cameraStage">
+    <iframe
+      id="subscriberFrame"
+      src="/api/video/subscriber?v=camera1"
+      allow="autoplay; camera"
+      title="Vonage subscriber YOLO feed"
+    ></iframe>
+
+    <div class="camera-hud" aria-live="polite">
+      <i></i>
+      <div>
+        <strong id="status">Vonage connected</strong>
+        <span id="detail">initializing real time camera stream</span>
+      </div>
+    </div>
+  </main>
+
+  <video id="sourceVideo" src="/api/video/demo-source" muted playsinline loop crossorigin="anonymous"></video>
+  <canvas id="publishCanvas"></canvas>
+
+<script>
+const sourceVideo = document.getElementById("sourceVideo");
+const canvas = document.getElementById("publishCanvas");
+const ctx = canvas.getContext("2d");
+const statusEl = document.getElementById("status");
+const detailEl = document.getElementById("detail");
+
+let subscriberReady = false;
+let publisherSession = null;
+let publisher = null;
+let drawTimer = null;
+let cameraStarted = false;
+
+function setStatus(status, detail) {
+  statusEl.textContent = status;
+  detailEl.textContent = detail;
+}
+
+function waitForSubscriber(timeoutMs = 15000) {
+  if (subscriberReady) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (subscriberReady) {
+        clearInterval(timer);
+        resolve();
+      } else if (Date.now() - startedAt > timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("subscriber timeout"));
+      }
+    }, 100);
+  });
+}
+
+function connectSession(session, token) {
+  return new Promise((resolve, reject) => {
+    session.connect(token, error => error ? reject(error) : resolve());
+  });
+}
+
+function publishToSession(session, pub) {
+  return new Promise((resolve, reject) => {
+    session.publish(pub, error => error ? reject(error) : resolve());
+  });
+}
+
+async function waitForMetadata(video) {
+  if (video.readyState >= 1 && video.videoWidth > 0) return;
+
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("video metadata timeout")), 10000);
+    video.addEventListener("loadedmetadata", () => {
+      clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+  });
+}
+
+function createCanvasTrack() {
+  const width = sourceVideo.videoWidth || 1280;
+  const height = sourceVideo.videoHeight || 720;
+
+  canvas.width = width;
+  canvas.height = height;
+
+  if (drawTimer) clearInterval(drawTimer);
+
+  const targetFps = 25;
+  drawTimer = setInterval(() => {
+    if (sourceVideo.readyState >= 2) {
+      ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+    }
+  }, 1000 / targetFps);
+
+  const canvasStream = canvas.captureStream(targetFps);
+  const track = canvasStream.getVideoTracks()[0];
+  if (!track) throw new Error("could not create camera track");
+  return track;
+}
+
+async function startCameraStream() {
+  if (cameraStarted) return;
+  cameraStarted = true;
+
+  try {
+    setStatus("Vonage connected", "loading foc.mp4 camera feed");
+    await waitForSubscriber();
+
+    sourceVideo.muted = true;
+    await sourceVideo.play();
+    await waitForMetadata(sourceVideo);
+
+    setStatus("Vonage connected", "publishing camera stream");
+    const response = await fetch("/api/video/credentials");
+    const creds = await response.json();
+    if (!response.ok) throw new Error(creds.detail || "credentials error");
+
+    publisherSession = OT.initSession(creds.application_id, creds.session_id);
+    await connectSession(publisherSession, creds.publisher_token);
+
+    const videoTrack = createCanvasTrack();
+    publisher = OT.initPublisher(null, {
+      videoSource: videoTrack,
+      audioSource: null,
+      publishAudio: false,
+      publishVideo: true,
+      name: "foc-mp4-real-time-camera",
+      insertDefaultUI: false,
+    });
+
+    await publishToSession(publisherSession, publisher);
+    setStatus("Vonage connected", "YOLO inference running");
+  } catch (error) {
+    console.error(error);
+    setStatus("Vonage connection error", error.message || String(error));
+  }
+}
+
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin) return;
+  const data = event.data || {};
+
+  if (data.type === "subscriber-ready") {
+    subscriberReady = true;
+    startCameraStream();
+    return;
+  }
+
+  if (data.type === "subscriber-stream") {
+    setStatus("Vonage connected", "live camera stream received");
+    return;
+  }
+
+  if (data.type === "subscriber-error") {
+    setStatus("Vonage subscriber error", data.message || "subscriber failed");
+    return;
+  }
+
+  if (data.type === "yolo-result") {
+    if (data.result && data.result.fire_or_smoke) {
+      const labels = (data.result.detections || [])
+        .filter(item => ["fire", "smoke"].includes(String(item.class_name).toLowerCase()))
+        .map(item => `${item.class_name} ${(Number(item.confidence || 0) * 100).toFixed(1)}%`)
+        .join(" · ");
+      setStatus("Vonage connected", labels || "fire or smoke detected");
+    } else {
+      setStatus("Vonage connected", "YOLO inference running");
+    }
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  if (drawTimer) clearInterval(drawTimer);
+  try {
+    if (publisherSession && publisher) publisherSession.unpublish(publisher);
+  } catch (_) {}
+  try { publisher?.destroy(); } catch (_) {}
+  try { publisherSession?.disconnect(); } catch (_) {}
+});
+
+startCameraStream();
+</script>
+</body>
+</html>

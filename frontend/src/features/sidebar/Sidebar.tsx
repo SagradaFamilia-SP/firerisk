@@ -1,19 +1,19 @@
 import { Bot, ChevronsLeft, ChevronsRight, Flame, Info, LogOut, Map, PanelsTopLeft, Settings } from 'lucide-react';
 
 import pyrosLogo from '../../assets/pyros-logo.png';
-import type { LayerKey } from '../../hooks/useDashboard';
+import pyrosMark from '../../assets/pyros-mark.svg';
 import type { ActiveModule } from '../shell/AppShell';
-import { LayerControls } from './LayerControls';
 
-export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer, activeModule, onSelectModule }: {
-  layers: Record<LayerKey, boolean>;
-  collapsed: boolean; onCollapseToggle: () => void; onToggleLayer: (layer: LayerKey) => void;
+export function Sidebar({ collapsed, onCollapseToggle, activeModule, onSelectModule, onOpenSettings }: {
+  collapsed: boolean; onCollapseToggle: () => void;
   activeModule: ActiveModule; onSelectModule: (module: ActiveModule) => void;
+  onOpenSettings: () => void;
 }) {
   return (
     <aside className={`sidebar tactical-sidebar ${collapsed ? 'is-collapsed' : ''}`} aria-label="Contexto territorial">
       <div className="sidebar-brand">
         <img src={pyrosLogo} alt="PYROS" className="brand__logo" />
+        <img src={pyrosMark} alt="" className="brand__mark-logo" aria-hidden="true" />
         <button
           type="button"
           className="sidebar-toggle"
@@ -38,11 +38,10 @@ export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer, ac
         <button type="button" className={`module-item ${activeModule === 'chat' ? 'is-active' : ''}`} aria-current={activeModule === 'chat' ? 'page' : undefined} onClick={() => onSelectModule('chat')}>
           <span><Bot size={18} /><span className="module-item__text">Chat Asistente</span></span>{activeModule === 'chat' ? <b>ACTIVO</b> : <small>AI AGENT</small>}
         </button>
-        <a className="module-item" href="#about">
-          <span><Info size={18} /><span className="module-item__text">About</span></span><small>v2.4.1</small>
-        </a>
+        <button type="button" className={`module-item ${activeModule === 'about' ? 'is-active' : ''}`} aria-current={activeModule === 'about' ? 'page' : undefined} onClick={() => onSelectModule('about')}>
+          <span><Info size={18} /><span className="module-item__text">About</span></span>{activeModule === 'about' ? <b>ACTIVO</b> : <small>v2.4.1</small>}
+        </button>
       </nav>
-      <LayerControls layers={layers} onToggle={onToggleLayer} />
       <footer className="sidebar-profile">
         <div className="sidebar-profile__avatar" aria-hidden="true">YK<i /></div>
         <div className="sidebar-profile__info">
@@ -50,7 +49,7 @@ export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer, ac
           <small>Operador Centro Mando</small>
         </div>
         <div className="sidebar-profile__actions">
-          <button type="button" aria-label="Configuración"><Settings size={16} /></button>
+          <button type="button" aria-label="Abrir configuración" onClick={onOpenSettings}><Settings size={16} /></button>
           <button type="button" aria-label="Cerrar sesión"><LogOut size={16} /></button>
         </div>
       </footer>

@@ -35,4 +35,4 @@ def test_reverse_location_uses_nominatim_and_caches(client: TestClient) -> None:
     assert first.json()["coordinates"] == "40.7341, -86.4360"
     assert second.status_code == 200
     assert upstream.call_count == 1
-    assert "IGNIS" in upstream.calls[0].request.headers["user-agent"]
+    assert "PYROS" in upstream.calls[0].request.headers["user-agent"]

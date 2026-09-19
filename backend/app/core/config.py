@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     firms_wms_cache_ttl_seconds: int = 900
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     nominatim_cache_ttl_seconds: int = 86_400
-    nominatim_user_agent: str = "IGNIS Wildfire Intelligence demo contact: local-dev"
+    nominatim_user_agent: str = "PYROS Wildfire Intelligence demo contact: local-dev"
 
     @field_validator("frontend_origins", mode="before")
     @classmethod

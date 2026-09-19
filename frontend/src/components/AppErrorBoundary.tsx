@@ -7,7 +7,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, { faile
   static getDerivedStateFromError() { return { failed: true }; }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('IGNIS render error', error, info.componentStack);
+    console.error('PYROS render error', error, info.componentStack);
   }
 
   render() {
@@ -26,4 +26,3 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, { faile
     return this.props.children;
   }
 }
-

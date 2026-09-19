@@ -27,7 +27,7 @@ export function ChatPanel({ chat }: { chat: Chat }) {
   };
 
   return (
-    <section className="chat-panel" aria-label="Chat asistente IGNIS">
+    <section className="chat-panel" aria-label="Chat asistente PYROS">
       <header className="chat-panel__header">
         <span><Bot size={16} /> Chat Asistente</span>
         <small>AI AGENT · NASA FIRMS en tiempo real</small>

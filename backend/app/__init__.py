@@ -1,2 +1,1 @@
-"""IGNIS backend application package."""
-
+"""PYROS backend application package."""

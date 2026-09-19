@@ -1,0 +1,8 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PYROS">
+  <rect width="1024" height="1024" fill="#000"/>
+  <g fill="none" stroke="#f4511e" stroke-width="58" stroke-linecap="round">
+    <path d="M205 769A375 375 0 1 1 819 769"/>
+    <path d="M323 705A238 238 0 1 1 701 705"/>
+  </g>
+  <circle cx="512" cy="608" r="106" fill="#f4511e"/>
+</svg>

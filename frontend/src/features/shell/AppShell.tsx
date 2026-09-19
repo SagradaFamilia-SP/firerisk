@@ -12,12 +12,14 @@ import type { ReverseLocationResponse } from '../../types/api';
 import { FireTable } from '../incidents/FireTable';
 import { IntelligencePanel } from '../intelligence/IntelligencePanel';
 import { Sidebar } from '../sidebar/Sidebar';
+import { SettingsPanel } from '../settings/SettingsPanel';
 import { SimulationWorkspace } from '../simulation/SimulationWorkspace';
+import { AboutPanel } from '../about/AboutPanel';
 import { ReportDownloadModal } from './ReportDownloadModal';
 import { TopBar } from './TopBar';
 
 type Dashboard = ReturnType<typeof useDashboard>;
-export type ActiveModule = 'map' | 'table' | 'chat' | 'simulation';
+export type ActiveModule = 'map' | 'table' | 'chat' | 'simulation' | 'about';
 
 export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, chat, fireReport, simulation, map }: {
   dashboard: Dashboard; liveFires: LiveFires; fireSpread: FireSpread;
@@ -26,6 +28,7 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeModule, setActiveModule] = useState<ActiveModule>('map');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const hasSelectedFire = liveFires.selectedFireId !== null;
   // The telemetry panel is map chrome: keep the selection alive so it's still
   // there on return, but don't show it docked next to the incident table too.
@@ -45,12 +48,11 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
       <TopBar health={dashboard.health} location={activeLocation} context={activeContext} selected={selectedFire !== null} />
       <div className={`workspace ${sidebarCollapsed ? 'workspace--sidebar-collapsed' : ''} ${showIntelligencePanel ? 'workspace--with-intelligence' : 'workspace--map-only'}`}>
         <Sidebar
-          layers={dashboard.layers}
           collapsed={sidebarCollapsed}
           onCollapseToggle={() => setSidebarCollapsed((current) => !current)}
-          onToggleLayer={dashboard.toggleLayer}
           activeModule={activeModule}
           onSelectModule={setActiveModule}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
         <main className="map-region">
           <div style={{ display: activeModule === 'map' ? 'contents' : 'none' }}>{map}</div>
@@ -61,7 +63,8 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
             />
           )}
           {activeModule === 'chat' && <ChatPanel chat={chat} />}
-          {activeModule === 'simulation' && <SimulationWorkspace simulation={simulation} />}
+          {activeModule === 'simulation' && <SimulationWorkspace dashboard={dashboard} simulation={simulation} />}
+          {activeModule === 'about' && <AboutPanel />}
         </main>
         {showIntelligencePanel && (
           <IntelligencePanel
@@ -73,6 +76,13 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
           />
         )}
       </div>
+      {settingsOpen && (
+        <SettingsPanel
+          layers={dashboard.layers}
+          onToggleLayer={dashboard.toggleLayer}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       <ReportDownloadModal fireReport={fireReport} />
     </div>
   );

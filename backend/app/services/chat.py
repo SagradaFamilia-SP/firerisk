@@ -136,7 +136,7 @@ def _build_model_messages(
         ],
     }
     system = (
-        "Eres el asistente operativo de IGNIS, una plataforma de inteligencia de incendios forestales. "
+        "Eres el asistente operativo de PYROS, una plataforma de inteligencia de incendios forestales. "
         "Respondes siempre en español, con tono operativo y conciso. Trabajas EXCLUSIVAMENTE con los datos "
         "reales de NASA FIRMS que se te entregan en JSON; nunca inventes incendios, ubicaciones ni cifras "
         "que no estén en ese JSON."

@@ -22,4 +22,32 @@ describe('apiClient.fires', () => {
     expect(url).toContain('sources=VIIRS_NOAA20_NRT%2CVIIRS_NOAA21_NRT');
     expect(url.toLowerCase()).not.toContain('key');
   });
+
+  it('sends simulation scenario controls to spread endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      center: { lat: 39, lon: -6 },
+      max_hours: 12,
+      terrain_source: 'flat-fallback',
+      fuel_source: 'fallback-grass',
+      ignition_points: [],
+      weather: [],
+      snapshots: [],
+      warning: '',
+      model_notes: [],
+      scenario: { frp_mw: 20, brightness_k: 370, spread_multiplier: 1.8 },
+    }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiClient.spread({ lat: 39, lon: -6, frp_mw: 20, brightness_k: 370 });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/spread');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      lat: 39,
+      lon: -6,
+      frp_mw: 20,
+      brightness_k: 370,
+    });
+  });
 });

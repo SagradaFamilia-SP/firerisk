@@ -5,6 +5,7 @@ import type { FireReport } from '../../hooks/useFireReport';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
 import { FIRE_RENDER_LIMIT } from '../map/sampleFires';
+import { SpreadImpactSummary } from '../map/SpreadImpactSummary';
 import type { FirmsSource, ReverseLocationResponse } from '../../types/api';
 
 const sourceLabels: Record<FirmsSource, string> = {
@@ -131,6 +132,12 @@ export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocati
             </div>
           );
         })()}
+        {fireSpread.data && fireSpread.data.snapshots[fireSpread.data.max_hours].area_km2 > 0 && (
+          <div className="fire-detail">
+            <strong>Daños potenciales a +{fireSpread.data.max_hours} h</strong>
+            <SpreadImpactSummary snapshot={fireSpread.data.snapshots[fireSpread.data.max_hours]} />
+          </div>
+        )}
       </div>}
     </section>
   );

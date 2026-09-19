@@ -10,7 +10,7 @@ export function ForecastTimeline({ hour, onChange, onPlayingChange }: {
   }, [onPlayingChange, playing]);
   useEffect(() => {
     if (!playing) return;
-    const timer = window.setInterval(() => onChange(hour >= 12 ? 0 : hour + 1), 1_000);
+    const timer = window.setInterval(() => onChange(hour >= 12 ? 0 : hour + 1), 450);
     return () => window.clearInterval(timer);
   }, [hour, onChange, playing]);
   return (

@@ -65,6 +65,8 @@ FIRMS_RECENT_HOURS = 8.0
 
 MAX_ROS_M_MIN = 80.0
 MIN_ROS_M_MIN = 0.005
+DEFAULT_SCENARIO_FRP_MW = 4.9
+DEFAULT_SCENARIO_BRIGHTNESS_K = 336.6
 
 # Byram (1959) fireline intensity: I = H * w * r (kW/m).
 # H (heat of combustion) barely varies across forest fuels in practice, so it
@@ -235,6 +237,18 @@ def fireline_intensity_kw_m(fuel_load_kg_m2_value: float, ros_m_min: float) -> f
     """Byram (1959): I = H * w * r, with r converted from m/min to m/s so I comes out in kW/m."""
     ros_m_s = max(ros_m_min, 0.0) / 60.0
     return HEAT_OF_COMBUSTION_KJ_KG * fuel_load_kg_m2_value * ros_m_s
+
+
+def scenario_spread_multiplier(frp_mw: float, brightness_k: float) -> float:
+    """Conservative scenario control for hypothetical fires.
+
+    FRP and brightness do not replace Rothermel's terrain/fuel/weather inputs,
+    but for a what-if simulation they are useful proxies for initial fire
+    vigor. Bound the multiplier so a slider cannot create absurd fronts.
+    """
+    frp_factor = math.sqrt(max(frp_mw, 0.1) / DEFAULT_SCENARIO_FRP_MW)
+    brightness_factor = (max(brightness_k, 250.0) / DEFAULT_SCENARIO_BRIGHTNESS_K) ** 1.5
+    return round(_clip(frp_factor * brightness_factor, 0.35, 2.5), 3)
 
 
 # =============================================================================
@@ -635,6 +649,7 @@ def simulate_grid(
     ignition_cells: list[tuple[int, int]],
     cell_size_m: float,
     max_hours: int,
+    spread_multiplier: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Returns (arrival_time_minutes, ros_m_min_at_arrival): the ROS that actually caused
     each cell to ignite, reused for fireline intensity (Byram) alongside the ROS itself."""
@@ -677,6 +692,7 @@ def simulate_grid(
                 spread_bearing_deg=bearing,
             )
             ros = _clip(ros, MIN_ROS_M_MIN, MAX_ROS_M_MIN) if ros > 0 else 0.0
+            ros = _clip(ros * spread_multiplier, MIN_ROS_M_MIN, MAX_ROS_M_MIN) if ros > 0 else 0.0
             if ros <= 0:
                 continue
 
@@ -708,6 +724,16 @@ def _ring_from_contour(contour: np.ndarray, lat_grid: np.ndarray, lon_grid: np.n
     return ring
 
 
+def _burned_area_by_fuel(mask: np.ndarray, fuel_name_grid: np.ndarray, cell_area_km2: float) -> dict[str, float]:
+    """Km² of burned area broken down by Anderson fuel model name — the real
+    ESA WorldCover-derived land cover under each burned cell, not an estimate."""
+    burned_names = fuel_name_grid[mask & (fuel_name_grid != "")]
+    if burned_names.size == 0:
+        return {}
+    names, counts = np.unique(burned_names, return_counts=True)
+    return {str(name): round(float(count) * cell_area_km2, 3) for name, count in zip(names, counts, strict=True)}
+
+
 def build_snapshots(
     arrival: np.ndarray,
     ros_at_arrival: np.ndarray,
@@ -726,10 +752,12 @@ def build_snapshots(
     # real ROS that actually ignited it (captured by simulate_grid) and the
     # fuel load of its own Anderson model. Cells never reached keep ros=NaN.
     fuel_load_grid = np.zeros(fuel_models.shape, dtype=float)
+    fuel_name_grid = np.full(fuel_models.shape, "", dtype=object)
     for index in np.ndindex(fuel_models.shape):
         fm = fuel_models[index]
         if fm is not None:
             fuel_load_grid[index] = fuel_load_kg_m2(fm)
+            fuel_name_grid[index] = fm.name
     intensity_grid = HEAT_OF_COMBUSTION_KJ_KG * fuel_load_grid * (np.nan_to_num(ros_at_arrival, nan=0.0) / 60.0)
 
     previous_threshold = -1.0
@@ -780,6 +808,7 @@ def build_snapshots(
                 intensity_kw_m_min=round(intensity_min, 1),
                 intensity_kw_m_mean=round(intensity_mean, 1),
                 intensity_kw_m_max=round(intensity_max, 1),
+                burned_area_by_fuel_km2=_burned_area_by_fuel(mask, fuel_name_grid, cell_area_km2),
             )
         )
         previous_threshold = threshold
@@ -787,7 +816,7 @@ def build_snapshots(
     return snapshots
 
 
-def _build_model_notes(terrain_source: str, fuel_source: str, firms_detections_used: int) -> list[str]:
+def _build_model_notes(terrain_source: str, fuel_source: str, firms_detections_used: int, spread_multiplier: float) -> list[str]:
     notes = [
         "Cada celda de ignición se trata siempre como combustible, incluida la clicada (FIRMS puede "
         "caer sobre un píxel de carretera/edificio/agua por su huella de sensor); el resto de la "
@@ -803,8 +832,9 @@ def _build_model_notes(terrain_source: str, fuel_source: str, firms_detections_u
         "se usaron como semillas de ignición adicionales, además del punto clicado.",
         "La humedad del combustible fino muerto se estima a partir de temperatura/humedad relativa "
         "(aproximación de humedad de equilibrio); no es una medición real de humedad de combustible.",
-        "La potencia radiativa del fuego (FRP) de NASA FIRMS se usa solo para seleccionar detecciones "
-        "recientes como semillas; nunca como combustible ni como entrada del ROS.",
+        "La potencia radiativa (FRP) y el brillo del escenario se aplican como multiplicador acotado "
+        f"de vigor inicial ({spread_multiplier:.2f}x) sobre el ROS calculado por Rothermel; el terreno, "
+        "el combustible y la meteorología siguen siendo las entradas principales.",
         "Si el fuego alcanza el borde de la rejilla antes de la hora solicitada, la propagación se "
         "detiene ahí; el dominio no crece dinámicamente con el viento o las horas pedidas.",
         "No se modela fuego de copa, pavesas/proyección de brasas, cortafuegos, carreteras como "
@@ -814,6 +844,9 @@ def _build_model_notes(terrain_source: str, fuel_source: str, firms_detections_u
         "Anderson de cada celda (se asume consumo completo del combustible fino modelado) y r el ROS "
         "real que encendió esa celda en la simulación; solo se calcula sobre las celdas que se "
         "incendiaron durante cada hora, no sobre todo el área ya quemada.",
+        "La superficie quemada por tipo de combustible (km²) refleja la cobertura real de ESA "
+        "WorldCover bajo las celdas incendiadas hasta esa hora; no incluye población, vivienda ni "
+        "infraestructura, que este modelo no estima.",
     ]
     if terrain_source == "flat-fallback":
         notes.append(
@@ -828,7 +861,13 @@ def _build_model_notes(terrain_source: str, fuel_source: str, firms_detections_u
     return notes
 
 
-async def simulate_spread(lat: float, lon: float, max_hours: int) -> SpreadResponse:
+async def simulate_spread(
+    lat: float,
+    lon: float,
+    max_hours: int,
+    frp_mw: float = DEFAULT_SCENARIO_FRP_MW,
+    brightness_k: float = DEFAULT_SCENARIO_BRIGHTNESS_K,
+) -> SpreadResponse:
     lat_grid, lon_grid = make_grid(lat, lon, GRID_SIZE, CELL_SIZE_M)
 
     weather = await fetch_hourly_weather(lat, lon)
@@ -845,8 +884,9 @@ async def simulate_spread(lat: float, lon: float, max_hours: int) -> SpreadRespo
         if fuel_models[r, c] is None:
             fuel_models[r, c] = FM1
 
+    spread_multiplier = scenario_spread_multiplier(frp_mw, brightness_k)
     arrival, ros_at_arrival = simulate_grid(
-        weather, fuel_models, burnable, slope, upslope_bearing, ignition_cells, CELL_SIZE_M, max_hours
+        weather, fuel_models, burnable, slope, upslope_bearing, ignition_cells, CELL_SIZE_M, max_hours, spread_multiplier
     )
     snapshots = build_snapshots(
         arrival, ros_at_arrival, fuel_models, lat_grid, lon_grid, lat, lon, CELL_SIZE_M, max_hours
@@ -877,5 +917,10 @@ async def simulate_spread(lat: float, lon: float, max_hours: int) -> SpreadRespo
             "fuego de copa, pavesas, cortafuegos ni supresión activa. No usar para decisiones "
             "de emergencia, evacuación o seguridad de vidas."
         ),
-        model_notes=_build_model_notes(terrain_source, fuel_source, firms_detections_used),
+        model_notes=_build_model_notes(terrain_source, fuel_source, firms_detections_used, spread_multiplier),
+        scenario={
+            "frp_mw": round(frp_mw, 3),
+            "brightness_k": round(brightness_k, 3),
+            "spread_multiplier": spread_multiplier,
+        },
     )

@@ -1,6 +1,6 @@
-# IGNIS — Wildfire Intelligence
+# PYROS — Wildfire Intelligence
 
-Monorepo de la demo operativa de riesgo de incendios de IGNIS. Incluye un backend FastAPI para datos reales de incendios, simulación, meteorología y planes de actuación, y un dashboard React centrado en mapa para explorar el impacto sobre activos críticos.
+Monorepo de la demo operativa de riesgo de incendios de PYROS. Incluye un backend FastAPI para datos reales de incendios, simulación, meteorología y planes de actuación, y un dashboard React centrado en mapa para explorar el impacto sobre activos críticos.
 
 ## Estructura
 
@@ -98,4 +98,4 @@ make check   # todas las comprobaciones
 
 El mapa utiliza NASA FIRMS, teselas remotas de Esri y OpenStreetMap. La meteorología real se consulta a Open-Meteo, por lo que estas funciones requieren conexión a Internet.
 
-> IGNIS es una demo de apoyo visual para una hackathon. La propagación mostrada es una simulación y no sustituye información oficial ni protocolos de emergencias.
+> PYROS es una demo de apoyo visual para una hackathon. La propagación mostrada es una simulación y no sustituye información oficial ni protocolos de emergencias.

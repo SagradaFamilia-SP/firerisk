@@ -9,10 +9,18 @@ async def generate_chat_completion(
     messages: list[dict[str, str]],
     *,
     temperature: float = 0.3,
-    max_tokens: int = 700,
-    timeout: float = 15.0,
+    max_tokens: int = 1_500,
+    timeout: float = 30.0,
 ) -> str | None:
     """Asks the configured OpenAI-compatible models for a completion.
+
+    The configured model is a Qwen3-style hybrid reasoning model: by default
+    it spends a chunk of its own `max_tokens` budget "thinking" (returned
+    separately as `message.reasoning`, with `message.content` left null)
+    before it writes the actual answer — a trivial one-word test reply alone
+    used ~180 reasoning tokens. `enable_thinking: false` (vLLM's chat template
+    switch for this model family) skips that entirely, so the full budget
+    goes straight to the answer we actually want and replies come back fast.
 
     Returns None on any failure (offline models, bad response shape, timeout)
     so callers can fall back to a deterministic reply instead of surfacing
@@ -24,10 +32,11 @@ async def generate_chat_completion(
             response = await client.post(
                 f"{settings.model_base_url}/chat/completions",
                 json={
-                    "models": settings.model_id,
+                    "model": settings.model_id,
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
+                    "chat_template_kwargs": {"enable_thinking": False},
                 },
             )
             response.raise_for_status()

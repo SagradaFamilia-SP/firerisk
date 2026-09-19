@@ -197,7 +197,7 @@ async def answer_chat(request: ChatRequest, firms_service: FirmsService, setting
     reply = await generate_chat_completion(
         settings, _build_model_messages(request.message, region_label, hours, detections)
     )
-    narrative_source: Literal["models", "fallback"] = "models" if reply else "fallback"
+    narrative_source: Literal["model", "fallback"] = "model" if reply else "fallback"
     if not reply:
         reply = _build_fallback_reply(region_label, hours, detections)
 

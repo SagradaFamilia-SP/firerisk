@@ -2,6 +2,7 @@ import { Bot, Loader2, Mic, Send, Square, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Chat } from '../../hooks/useChat';
+import { renderMarkdown } from './markdown';
 import { apiClient, getErrorMessage } from '../../services/api';
 import type { FireConfidence } from '../../types/api';
 
@@ -84,7 +85,7 @@ export function ChatPanel({ chat }: { chat: Chat }) {
       <div className="chat-panel__scroll" ref={scrollRef}>
         {chat.entries.length === 0 && (
           <div className="chat-panel__empty">
-            <p>Pregunta por incendios activos en un país cubierto: España, Portugal, Francia, Italia o Grecia.</p>
+            <p>Consulta incendios activos, zonas de riesgo y evolución del fuego en tiempo real.</p>
             <div className="chat-panel__suggestions">
               {SUGGESTIONS.map((suggestion) => (
                 <button key={suggestion} type="button" onClick={() => chat.send(suggestion)}>{suggestion}</button>
@@ -97,7 +98,9 @@ export function ChatPanel({ chat }: { chat: Chat }) {
           <article key={entry.id} className={`chat-bubble chat-bubble--${entry.role}`}>
             <span className="chat-bubble__icon">{entry.role === 'user' ? <User size={14} /> : <Bot size={14} />}</span>
             <div className="chat-bubble__body">
-              <p>{entry.content}</p>
+              {entry.role === 'assistant'
+                ? <div className="chat-bubble__markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.content) }} />
+                : <p>{entry.content}</p>}
               {entry.summary && (
                 <div className="chat-bubble__meta">
                   <span>{entry.summary.region ?? 'Región no identificada'}</span>

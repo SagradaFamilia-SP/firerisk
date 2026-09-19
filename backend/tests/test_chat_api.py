@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 import respx
@@ -94,7 +95,7 @@ def test_chat_uses_model_narrative_when_available() -> None:
     _override([])
     try:
         with respx.mock(assert_all_called=False) as mock:
-            mock.post("http://fake-model/v1/chat/completions").mock(
+            route = mock.post("http://fake-model/v1/chat/completions").mock(
                 return_value=Response(
                     200, json={"choices": [{"message": {"content": "Informe generado por el modelo."}}]}
                 )
@@ -105,9 +106,21 @@ def test_chat_uses_model_narrative_when_available() -> None:
         app.dependency_overrides.clear()
 
     body = response.json()
-    assert body["summary"]["narrative_source"] == "models"
+    assert body["summary"]["narrative_source"] == "model"
     assert body["reply"] == "Informe generado por el modelo."
     assert body["summary"]["region"] == "Francia"
+    # Regression guard: the OpenAI-compatible payload key is "model" (singular).
+    # Sending "models" instead means the models server rejects/ignores the
+    # request and every real call silently falls back to the canned reply —
+    # the mock above returns 200 regardless of the payload, so only checking
+    # the actual request body catches that.
+    sent_payload = json.loads(route.calls.last.request.content)
+    assert sent_payload["model"] == "test-models"
+    assert "models" not in sent_payload
+    # The configured model is a Qwen3-style reasoning model that otherwise
+    # burns its token budget "thinking" before ever writing `content` —
+    # thinking must stay disabled so replies are fast and never come back null.
+    assert sent_payload["chat_template_kwargs"] == {"enable_thinking": False}
 
 
 def test_chat_reports_source_failure_gracefully() -> None:

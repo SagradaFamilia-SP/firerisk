@@ -33,6 +33,13 @@ export function useLiveFires() {
   const [state, setState] = useState<AsyncState<FireResponse>>({ status: 'idle', data: null, error: null });
   const [selectedFireId, setSelectedFireId] = useState<string | null>(null);
   const lastRequest = useRef<{ key: string; requestedAt: number } | null>(null);
+  // Read via a ref (not a `state` dependency) so this callback's identity stays
+  // stable: react-leaflet's ViewportObserver re-emits the viewport whenever this
+  // identity changes, which would otherwise re-run the fetch effect below and
+  // cancel/reschedule it every time `state` updates — a self-sustaining loop
+  // that never lets a request finish once a fire is selected.
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     if (!viewport || viewport.zoom < MIN_FIRE_FETCH_ZOOM || filters.sources.length === 0) return;
@@ -74,11 +81,11 @@ export function useLiveFires() {
     setViewport(nextViewport);
     setSelectedFireId((currentSelectedFireId) => {
       if (!currentSelectedFireId) return currentSelectedFireId;
-      const selectedFire = state.data?.detections.find((fire) => fire.id === currentSelectedFireId);
+      const selectedFire = stateRef.current.data?.detections.find((fire) => fire.id === currentSelectedFireId);
       if (!selectedFire || viewportContainsFire(nextViewport, selectedFire)) return currentSelectedFireId;
       return null;
     });
-  }, [state.data]);
+  }, []);
 
   return useMemo(() => ({
     state, viewport, filters, selectedFireId,

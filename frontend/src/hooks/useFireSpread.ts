@@ -26,12 +26,18 @@ export function useFireSpread(liveFires: LiveFires) {
       return;
     }
     const controller = new AbortController();
-    setState((current) => ({ status: 'loading', data: current.data, error: null }));
+    // Unlike the other async hooks, never carry the previous value into this
+    // loading/error state: `data` here is a single fire's simulation, and
+    // keeping the old fire's polygon/radius around under the newly selected
+    // fire's name (e.g. after a transient weather-fetch failure) is actively
+    // misleading, not resilient — the map camera and the detail panel would
+    // both go on describing the fire the user just left.
+    setState({ status: 'loading', data: null, error: null });
     apiClient.spread({ lat: fire.latitude, lon: fire.longitude }, controller.signal).then(
       (data) => setState({ status: 'success', data, error: null }),
       (error: unknown) => {
         if ((error as Error).name !== 'AbortError') {
-          setState((current) => ({ status: 'error', data: current.data, error: getErrorMessage(error) }));
+          setState({ status: 'error', data: null, error: getErrorMessage(error) });
         }
       },
     );

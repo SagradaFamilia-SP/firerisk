@@ -44,7 +44,16 @@ function ViewportObserver({ onViewport }: { onViewport: (viewport: MapViewport) 
 function SpreadAutoFocus({ fireSpread, followSpread }: { fireSpread: FireSpread; followSpread: boolean }) {
   const map = useMap();
   const hasFocusedPlayback = useRef(false);
+  const focusedCenter = useRef<string | null>(null);
   useEffect(() => {
+    // A fire switch mid-playback never toggles `followSpread` off, so track the
+    // fire's own identity too: otherwise the camera stays parked on whichever
+    // fire it last focused and never re-centers on the newly selected one.
+    const centerKey = fireSpread.data ? `${fireSpread.data.center.lat},${fireSpread.data.center.lon}` : null;
+    if (centerKey !== focusedCenter.current) {
+      focusedCenter.current = centerKey;
+      hasFocusedPlayback.current = false;
+    }
     if (!followSpread) {
       hasFocusedPlayback.current = false;
       return;

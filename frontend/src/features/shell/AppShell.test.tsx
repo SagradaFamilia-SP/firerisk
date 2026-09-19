@@ -158,6 +158,25 @@ describe('AppShell tactical layout', () => {
     expect(setSelectedFireId).toHaveBeenCalledWith(null);
   });
 
+  it('hides the telemetry panel when switching to the fire table, keeping the selection for when the map returns', () => {
+    render(
+      <AppShell
+        dashboard={dashboard as never}
+        liveFires={{ ...liveFires, selectedFireId: 'fire-1' }}
+        fireSpread={fireSpread}
+        map={<div aria-label="Mapa táctico">map</div>}
+      />,
+    );
+
+    expect(screen.getByLabelText('Inteligencia operativa')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Tabla de incendios/ }));
+    expect(screen.queryByLabelText('Inteligencia operativa')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mapa/ }));
+    expect(screen.getByLabelText('Inteligencia operativa')).toBeInTheDocument();
+  });
+
   it('collapses and expands the tactical sidebar from its toggle button', () => {
     render(
       <AppShell

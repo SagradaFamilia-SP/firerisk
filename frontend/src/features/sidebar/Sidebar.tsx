@@ -1,11 +1,13 @@
-import { Bot, ChevronsLeft, ChevronsRight, Flame, Info, Map, PanelsTopLeft } from 'lucide-react';
+import { Bot, ChevronsLeft, ChevronsRight, Flame, Info, LogOut, Map, PanelsTopLeft, Settings } from 'lucide-react';
 
 import type { LayerKey } from '../../hooks/useDashboard';
+import type { ActiveModule } from '../shell/AppShell';
 import { LayerControls } from './LayerControls';
 
-export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer }: {
+export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer, activeModule, onSelectModule }: {
   layers: Record<LayerKey, boolean>;
   collapsed: boolean; onCollapseToggle: () => void; onToggleLayer: (layer: LayerKey) => void;
+  activeModule: ActiveModule; onSelectModule: (module: ActiveModule) => void;
 }) {
   return (
     <aside className={`sidebar tactical-sidebar ${collapsed ? 'is-collapsed' : ''}`} aria-label="Contexto territorial">
@@ -27,12 +29,12 @@ export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer }: 
       </div>
       <nav className="module-nav" aria-label="Módulos operativos">
         <span className="module-nav__label">Módulos Operativos</span>
-        <a className="module-item is-active" href="#mapa" aria-current="page">
-          <span><Map size={18} /><span className="module-item__text">Mapa</span></span><b>ACTIVO</b>
-        </a>
-        <a className="module-item" href="#incendios">
-          <span><Flame size={18} /><span className="module-item__text">Tabla de incendios</span></span><b className="module-item__alert">LIVE</b>
-        </a>
+        <button type="button" className={`module-item ${activeModule === 'map' ? 'is-active' : ''}`} aria-current={activeModule === 'map' ? 'page' : undefined} onClick={() => onSelectModule('map')}>
+          <span><Map size={18} /><span className="module-item__text">Mapa</span></span>{activeModule === 'map' && <b>ACTIVO</b>}
+        </button>
+        <button type="button" className={`module-item ${activeModule === 'table' ? 'is-active' : ''}`} aria-current={activeModule === 'table' ? 'page' : undefined} onClick={() => onSelectModule('table')}>
+          <span><Flame size={18} /><span className="module-item__text">Tabla de incendios</span></span>{activeModule === 'table' ? <b>ACTIVO</b> : <b className="module-item__alert">LIVE</b>}
+        </button>
         <a className="module-item" href="#simulacion">
           <span><PanelsTopLeft size={18} /><span className="module-item__text">Simulación de incendios</span></span><small>FARSITE</small>
         </a>
@@ -44,6 +46,17 @@ export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer }: 
         </a>
       </nav>
       <LayerControls layers={layers} onToggle={onToggleLayer} />
+      <footer className="sidebar-profile">
+        <div className="sidebar-profile__avatar" aria-hidden="true">YK<i /></div>
+        <div className="sidebar-profile__info">
+          <span><strong>Yasine K.</strong><b>L3</b></span>
+          <small>Operador Centro Mando</small>
+        </div>
+        <div className="sidebar-profile__actions">
+          <button type="button" aria-label="Configuración"><Settings size={16} /></button>
+          <button type="button" aria-label="Cerrar sesión"><LogOut size={16} /></button>
+        </div>
+      </footer>
     </aside>
   );
 }

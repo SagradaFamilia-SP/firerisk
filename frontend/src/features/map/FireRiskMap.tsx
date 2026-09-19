@@ -39,8 +39,9 @@ function SpreadAutoFocus({ fireSpread, followSpread }: { fireSpread: FireSpread;
     }
     if (hasFocusedPlayback.current || !fireSpread.data) return;
     const snapshot = fireSpread.data.snapshots[Math.min(fireSpread.hour, fireSpread.data.max_hours)];
-    if (!snapshot || snapshot.polygon.length < 3) return;
-    const bounds = latLngBounds(snapshot.polygon.map((point) => [point.lat, point.lon]));
+    const points = snapshot?.rings.flat() ?? [];
+    if (points.length < 3) return;
+    const bounds = latLngBounds(points.map((point) => [point.lat, point.lon]));
     hasFocusedPlayback.current = true;
     map.fitBounds(bounds.pad(0.35), {
       animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,

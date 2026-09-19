@@ -36,12 +36,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 export const apiClient = {
   health: (signal?: AbortSignal) => request<HealthResponse>('/health', { signal }),
   fires: (viewport: MapViewport, filters: FireFilters, signal?: AbortSignal) => {
+    // Leaflet reports raw map bounds, which can legitimately exceed +/-180
+    // longitude at low zoom (e.g. a world view) or near the antimeridian.
+    // The backend rejects out-of-range values with 422, so clamp here.
+    const west = clamp(viewport.west, -180, 180);
+    const east = clamp(viewport.east, -180, 180);
+    const south = clamp(viewport.south, -90, 90);
+    const north = clamp(viewport.north, -90, 90);
     const params = new URLSearchParams({
-      west: String(viewport.west), south: String(viewport.south),
-      east: String(viewport.east), north: String(viewport.north),
+      west: String(west), south: String(south),
+      east: String(east), north: String(north),
       hours: String(filters.hours), sources: filters.sources.join(','),
       min_confidence: filters.minConfidence,
     });

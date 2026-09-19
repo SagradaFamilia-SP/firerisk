@@ -3,22 +3,24 @@ import { useEffect, useRef, useState } from 'react';
 import { apiClient, getErrorMessage } from '../services/api';
 import type { FireDetection, SpreadResponse } from '../types/api';
 import type { AsyncState } from './useDashboard';
-import type { LiveFires } from './useLiveFires';
 
 const empty: AsyncState<SpreadResponse> = { status: 'idle', data: null, error: null };
 
 /**
  * Owns both the spread simulation for the selected fire AND the timeline hour,
  * so the slider only ever drives this real simulation (never a mock scenario).
+ * Takes the full detection list (NASA + camera-origin, already merged by the
+ * caller) so a camera-detected fire's real coordinates can drive the same
+ * simulation as any satellite detection.
  */
-export function useFireSpread(liveFires: LiveFires) {
+export function useFireSpread(selectedFireId: string | null, allDetections: FireDetection[]) {
   const detectionsRef = useRef<FireDetection[]>([]);
-  detectionsRef.current = liveFires.state.data?.detections ?? [];
+  detectionsRef.current = allDetections;
   const [state, setState] = useState<AsyncState<SpreadResponse>>(empty);
   const [hour, setHour] = useState(0);
 
   useEffect(() => {
-    const fireId = liveFires.selectedFireId;
+    const fireId = selectedFireId;
     const fire = fireId ? detectionsRef.current.find((item) => item.id === fireId) : undefined;
     setHour(0);
     if (!fire) {
@@ -42,7 +44,7 @@ export function useFireSpread(liveFires: LiveFires) {
       },
     );
     return () => controller.abort();
-  }, [liveFires.selectedFireId]);
+  }, [selectedFireId]);
 
   return { ...state, hour, setHour };
 }

@@ -5,24 +5,27 @@ import type { FireReport } from '../../hooks/useFireReport';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
 import { FIRE_RENDER_LIMIT } from '../map/sampleFires';
-import type { FirmsSource, ReverseLocationResponse } from '../../types/api';
+import type { FireDetection, FirmsSource, ReverseLocationResponse } from '../../types/api';
 
-const sourceLabels: Record<FirmsSource, string> = {
+const NASA_SOURCES: readonly FirmsSource[] = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT'];
+
+const sourceLabels = {
   VIIRS_NOAA20_NRT: 'NOAA-20',
   VIIRS_NOAA21_NRT: 'NOAA-21',
-};
+  CAMERA: 'Cámara',
+} satisfies Record<FireDetection['source'], string>;
 
 const utcDate = (value: string) => new Intl.DateTimeFormat('es-ES', {
   dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC',
 }).format(new Date(value));
 
-export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocation }: {
+export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocation, selectedFire }: {
   liveFires: LiveFires; fireSpread: FireSpread; fireReport: FireReport;
-  reverseLocation?: AsyncState<ReverseLocationResponse>;
+  reverseLocation?: AsyncState<ReverseLocationResponse>; selectedFire: FireDetection | null;
 }) {
   const { hour } = fireSpread;
-  const { filters, state, selectedFireId } = liveFires;
-  const selected = state.data?.detections.find((fire) => fire.id === selectedFireId);
+  const { filters, state } = liveFires;
+  const selected = selectedFire ?? undefined;
   const toggleSource = (source: FirmsSource) => {
     const hasSource = filters.sources.includes(source);
     if (hasSource && filters.sources.length === 1) return;
@@ -48,7 +51,7 @@ export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocati
         </select>
       </div>
       <div className="source-toggles">
-        {(Object.keys(sourceLabels) as FirmsSource[]).map((source) => <label key={source}><input type="checkbox" checked={filters.sources.includes(source)} onChange={() => toggleSource(source)} /> {sourceLabels[source]}</label>)}
+        {NASA_SOURCES.map((source) => <label key={source}><input type="checkbox" checked={filters.sources.includes(source)} onChange={() => toggleSource(source)} /> {sourceLabels[source]}</label>)}
       </div>
       {liveFires.viewport && liveFires.viewport.zoom < 5
         ? <p className="data-hint">Acerca el mapa para consultar cada detección.</p>
@@ -100,7 +103,11 @@ export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocati
           <span>{selected.daynight === 'day' ? 'Día' : 'Noche'}</span>
           {selected.scan && selected.track && <span>Scan {selected.scan.toFixed(2)} · Track {selected.track.toFixed(2)}</span>}
         </div>
-        <small>Anomalía térmica satelital; no confirma por sí sola un incendio.</small>
+        <small>
+          {selected.source === 'CAMERA'
+            ? 'Ubicación real reportada por la cámara; brillo y potencia son valores estimados (no medidos por satélite).'
+            : 'Anomalía térmica satelital; no confirma por sí sola un incendio.'}
+        </small>
         <button
           type="button"
           className="report-download-btn"

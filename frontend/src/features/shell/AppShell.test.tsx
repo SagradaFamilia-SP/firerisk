@@ -97,6 +97,14 @@ const simulation = {
   setHour: () => undefined,
 };
 
+const cameraFires = {
+  fires: [],
+  status: 'idle' as const,
+  error: null,
+  notification: null,
+  dismissNotification: () => undefined,
+};
+
 describe('AppShell tactical layout', () => {
   it('renders the IGNIS tactical chrome around the live map workspace', () => {
     render(
@@ -107,6 +115,7 @@ describe('AppShell tactical layout', () => {
         chat={chat}
         fireReport={fireReport}
         simulation={simulation}
+        cameraFires={cameraFires}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -132,6 +141,7 @@ describe('AppShell tactical layout', () => {
         chat={chat}
         fireReport={fireReport}
         simulation={simulation}
+        cameraFires={cameraFires}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -146,6 +156,7 @@ describe('AppShell tactical layout', () => {
         chat={chat}
         fireReport={fireReport}
         simulation={simulation}
+        cameraFires={cameraFires}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -174,6 +185,7 @@ describe('AppShell tactical layout', () => {
         chat={chat}
         fireReport={fireReport}
         simulation={simulation}
+        cameraFires={cameraFires}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -192,6 +204,7 @@ describe('AppShell tactical layout', () => {
         chat={chat}
         fireReport={fireReport}
         simulation={simulation}
+        cameraFires={cameraFires}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -209,6 +222,7 @@ describe('AppShell tactical layout', () => {
         chat={chat}
         fireReport={fireReport}
         simulation={simulation}
+        cameraFires={cameraFires}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -231,6 +245,7 @@ describe('AppShell tactical layout', () => {
         chat={chat}
         fireReport={fireReport}
         simulation={simulation}
+        cameraFires={cameraFires}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );

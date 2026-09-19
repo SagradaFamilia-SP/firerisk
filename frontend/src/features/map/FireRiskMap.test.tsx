@@ -48,7 +48,7 @@ describe('FireRiskMap', () => {
   it('contains tile failure without hiding map controls', () => {
     render(
       <FireRiskMap
-        layers={{ fire: true, spread: true }}
+        layers={{ fire: true, spread: true, camera: true }}
         baseMap="satellite"
         fires={[]}
         selectedFireId={null}
@@ -109,7 +109,7 @@ describe('FireRiskMap', () => {
 
     const { rerender } = render(
       <FireRiskMap
-        layers={{ fire: true, spread: true }}
+        layers={{ fire: true, spread: true, camera: true }}
         baseMap="satellite"
         fires={[]}
         selectedFireId={null}
@@ -133,7 +133,7 @@ describe('FireRiskMap', () => {
 
     rerender(
       <FireRiskMap
-        layers={{ fire: true, spread: true }}
+        layers={{ fire: true, spread: true, camera: true }}
         baseMap="satellite"
         fires={[]}
         selectedFireId={null}
@@ -179,7 +179,7 @@ describe('FireRiskMap', () => {
 
     render(
       <FireRiskMap
-        layers={{ fire: true, spread: true }}
+        layers={{ fire: true, spread: true, camera: true }}
         baseMap="satellite"
         fires={[]}
         selectedFireId={null}
@@ -204,7 +204,7 @@ describe('FireRiskMap', () => {
 
       const { rerender } = render(
         <FireRiskMap
-          layers={{ fire: true, spread: true }}
+          layers={{ fire: true, spread: true, camera: true }}
           baseMap="satellite"
           fires={[fireA, fireB]}
           selectedFireId="fire-a"
@@ -225,7 +225,7 @@ describe('FireRiskMap', () => {
       // Dragging to another point and clicking it re-centers on the new fire.
       rerender(
         <FireRiskMap
-          layers={{ fire: true, spread: true }}
+          layers={{ fire: true, spread: true, camera: true }}
           baseMap="satellite"
           fires={[fireA, fireB]}
           selectedFireId="fire-b"

@@ -2,7 +2,8 @@ import { CircleMarker, LayerGroup, Polygon, Popup, Tooltip } from 'react-leaflet
 
 import type { LayerKey } from '../../hooks/useDashboard';
 import type { FireSpread } from '../../hooks/useFireSpread';
-import type { FireDetection } from '../../types/api';
+import type { CameraFireDetection, FireDetection } from '../../types/api';
+import { cameraDetectionId } from './cameraFireToDetection';
 
 const fireRadius = (fire: FireDetection, selected: boolean) => {
   if (selected) return 9;
@@ -10,9 +11,10 @@ const fireRadius = (fire: FireDetection, selected: boolean) => {
   return Math.max(3.5, Math.min(7.5, 3.5 + Math.log10(frp + 1) * 2.3));
 };
 
-export function MapOverlays({ layers, fires, selectedFireId, onSelectFire, fireSpread }: {
+export function MapOverlays({ layers, fires, cameraFires, selectedFireId, onSelectFire, fireSpread }: {
   layers: Record<LayerKey, boolean>;
-  fires: FireDetection[]; selectedFireId: string | null; onSelectFire: (id: string | null) => void;
+  fires: FireDetection[]; cameraFires: CameraFireDetection[]; selectedFireId: string | null;
+  onSelectFire: (id: string | null) => void;
   fireSpread: FireSpread;
 }) {
   const fireHour = fireSpread.data ? Math.min(fireSpread.hour, fireSpread.data.max_hours) : 0;
@@ -32,6 +34,21 @@ export function MapOverlays({ layers, fires, selectedFireId, onSelectFire, fireS
       {layers.spread && fireRings.length > 0 && <LayerGroup>{fireRings.map((ring, index) => <Polygon key={index} positions={ring} pathOptions={{ color: '#ff2d1f', weight: 2.5, fillColor: '#ff5a3d', fillOpacity: 0.28 }}>
         <Tooltip>Propagación real (rejilla) · +{fireHour} h · radio máx {fireSnapshot?.radius_km_max.toFixed(2)} km</Tooltip>
       </Polygon>)}</LayerGroup>}
+      {layers.camera && <LayerGroup>{cameraFires.map((fire) => {
+        const id = cameraDetectionId(fire.id);
+        const selected = selectedFireId === id;
+        return (
+          <CircleMarker
+            key={id}
+            center={[fire.latitude, fire.longitude]}
+            radius={selected ? 11 : 8}
+            pathOptions={{ color: '#bfe3ff', weight: selected ? 3 : 2, fillColor: '#4ca7ee', fillOpacity: 0.85 }}
+            eventHandlers={{ click: () => onSelectFire(id) }}
+          >
+            <Tooltip direction="top">{fire.label} · confianza {(fire.confidence * 100).toFixed(0)}%</Tooltip>
+          </CircleMarker>
+        );
+      })}</LayerGroup>}
     </>
   );
 }

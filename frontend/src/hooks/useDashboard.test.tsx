@@ -21,16 +21,16 @@ describe('useDashboard', () => {
     });
   });
 
-  it('loads health and defaults the fire/spread layers on', async () => {
+  it('loads health and defaults all layers on', async () => {
     const { result } = renderHook(() => useDashboard());
     await waitFor(() => expect(result.current.health.status).toBe('success'));
     expect(result.current.health.data?.ok).toBe(true);
-    expect(result.current.layers).toEqual({ fire: true, spread: true });
+    expect(result.current.layers).toEqual({ fire: true, spread: true, camera: true });
   });
 
-  it('toggles a single layer without affecting the other', () => {
+  it('toggles a single layer without affecting the others', () => {
     const { result } = renderHook(() => useDashboard());
     act(() => result.current.toggleLayer('fire'));
-    expect(result.current.layers).toEqual({ fire: false, spread: true });
+    expect(result.current.layers).toEqual({ fire: false, spread: true, camera: true });
   });
 });

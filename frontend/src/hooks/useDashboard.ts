@@ -9,13 +9,13 @@ export type AsyncState<T> =
   | { status: 'success'; data: T; error: null }
   | { status: 'error'; data: T | null; error: string };
 
-export type LayerKey = 'fire' | 'spread';
+export type LayerKey = 'fire' | 'spread' | 'camera';
 
 const empty = <T,>(): AsyncState<T> => ({ status: 'idle', data: null, error: null });
 
 export function useDashboard() {
   const [health, setHealth] = useState<AsyncState<HealthResponse>>(empty);
-  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({ fire: true, spread: true });
+  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({ fire: true, spread: true, camera: true });
   const [baseMap, setBaseMap] = useState<'satellite' | 'street'>('satellite');
 
   useEffect(() => {

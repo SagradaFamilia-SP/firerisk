@@ -1,13 +1,17 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ChatPanel } from '../chat/ChatPanel';
+import { CamerasWorkspace } from '../cameras/CamerasWorkspace';
 import type { AsyncState, useDashboard } from '../../hooks/useDashboard';
+import type { CameraFires } from '../../hooks/useCameraFires';
 import type { Chat } from '../../hooks/useChat';
 import type { FireReport } from '../../hooks/useFireReport';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
 import type { SimulationSpread } from '../../hooks/useSimulationSpread';
+import { cameraDetectionId, cameraFireToDetection } from '../map/cameraFireToDetection';
+import { CameraFireNotice } from '../map/CameraFireNotice';
 import type { ReverseLocationResponse } from '../../types/api';
 import { FireTable } from '../incidents/FireTable';
 import { IntelligencePanel } from '../intelligence/IntelligencePanel';
@@ -17,12 +21,12 @@ import { ReportDownloadModal } from './ReportDownloadModal';
 import { TopBar } from './TopBar';
 
 type Dashboard = ReturnType<typeof useDashboard>;
-export type ActiveModule = 'map' | 'table' | 'chat' | 'simulation';
+export type ActiveModule = 'map' | 'table' | 'chat' | 'simulation' | 'cameras';
 
-export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, chat, fireReport, simulation, map }: {
+export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, chat, fireReport, simulation, cameraFires, map }: {
   dashboard: Dashboard; liveFires: LiveFires; fireSpread: FireSpread;
   reverseLocation?: AsyncState<ReverseLocationResponse>; chat: Chat; fireReport: FireReport;
-  simulation: SimulationSpread; map: ReactNode;
+  simulation: SimulationSpread; cameraFires: CameraFires; map: ReactNode;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeModule, setActiveModule] = useState<ActiveModule>('map');
@@ -30,7 +34,11 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
   // The telemetry panel is map chrome: keep the selection alive so it's still
   // there on return, but don't show it docked next to the incident table too.
   const showIntelligencePanel = hasSelectedFire && activeModule === 'map';
-  const selectedFire = liveFires.state.data?.detections.find((fire) => fire.id === liveFires.selectedFireId) ?? null;
+  const selectedFire = useMemo(() => {
+    const detections = liveFires.state.data?.detections ?? [];
+    const cameraDetections = cameraFires.fires.map(cameraFireToDetection);
+    return [...detections, ...cameraDetections].find((fire) => fire.id === liveFires.selectedFireId) ?? null;
+  }, [liveFires.state.data, liveFires.selectedFireId, cameraFires.fires]);
   const coordinates = selectedFire ? `${selectedFire.latitude.toFixed(4)}, ${selectedFire.longitude.toFixed(4)}` : null;
   const activeLocation = selectedFire
     ? reverseLocation?.status === 'success'
@@ -40,6 +48,11 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
   const activeContext = selectedFire
     ? `${selectedFire.satellite} · ${selectedFire.confidence}${reverseLocation?.status === 'success' ? ' · © OpenStreetMap' : ''}`
     : 'NASA FIRMS';
+  const viewCameraFireOnMap = (id: number) => {
+    liveFires.setSelectedFireId(cameraDetectionId(id));
+    setActiveModule('map');
+    cameraFires.dismissNotification(id);
+  };
   return (
     <div className="app-shell">
       <TopBar health={dashboard.health} location={activeLocation} context={activeContext} selected={selectedFire !== null} />
@@ -62,6 +75,7 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
           )}
           {activeModule === 'chat' && <ChatPanel chat={chat} />}
           {activeModule === 'simulation' && <SimulationWorkspace simulation={simulation} />}
+          {activeModule === 'cameras' && <CamerasWorkspace cameraFires={cameraFires} onViewOnMap={viewCameraFireOnMap} />}
         </main>
         {showIntelligencePanel && (
           <IntelligencePanel
@@ -69,11 +83,13 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ch
             fireSpread={fireSpread}
             fireReport={fireReport}
             reverseLocation={reverseLocation}
+            selectedFire={selectedFire}
             onClose={() => liveFires.setSelectedFireId(null)}
           />
         )}
       </div>
       <ReportDownloadModal fireReport={fireReport} />
+      <CameraFireNotice notification={cameraFires.notification} onDismiss={cameraFires.dismissNotification} onViewOnMap={viewCameraFireOnMap} />
     </div>
   );
 }

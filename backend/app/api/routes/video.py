@@ -166,6 +166,11 @@ async def camera_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "camera.html")
 
 
+@router.get("/camera-live", include_in_schema=False)
+async def camera_live_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "camera_live.html")
+
+
 @router.get("/subscriber", include_in_schema=False)
 async def subscriber_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "subscriber.html")

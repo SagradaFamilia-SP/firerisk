@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vonage connected camera (real time)</title>
+  <script src="https://static.opentok.com/v2/js/opentok.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050607;
+      color: #eef3f8;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #cameraStage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #050607;
+    }
+    #subscriberFrame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #050607;
+    }
+    .camera-hud {
+      position: absolute;
+      z-index: 20;
+      left: 14px;
+      top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      max-width: calc(100% - 28px);
+      padding: 8px 10px;
+      border: 1px solid rgba(148, 163, 184, .24);
+      border-radius: 8px;
+      background: rgba(5, 8, 12, .78);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .4);
+      backdrop-filter: blur(12px);
+      pointer-events: none;
+    }
+    .camera-hud i {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #31c48d;
+      box-shadow: 0 0 12px rgba(49, 196, 141, .75);
+    }
+    .camera-hud.is-error i { background: #ff5a5a; box-shadow: 0 0 12px rgba(255, 90, 90, .75); }
+    .camera-hud div {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+    .camera-hud strong {
+      overflow: hidden;
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .camera-hud span {
+      overflow: hidden;
+      color: #9fd6ff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <main id="cameraStage">
+    <iframe
+      id="subscriberFrame"
+      src="/api/video/subscriber?v=camera-live"
+      allow="autoplay; camera"
+      title="Vonage subscriber YOLO feed"
+    ></iframe>
+
+    <div class="camera-hud" aria-live="polite" id="hud">
+      <i></i>
+      <div>
+        <strong id="status">Vonage connected</strong>
+        <span id="detail">requesting camera permission</span>
+        <span id="recordingStatus"></span>
+      </div>
+    </div>
+  </main>
+
+<script>
+const statusEl = document.getElementById("status");
+const detailEl = document.getElementById("detail");
+const hudEl = document.getElementById("hud");
+const recordingStatusEl = document.getElementById("recordingStatus");
+
+function setRecordingStatus(text, color) {
+  recordingStatusEl.textContent = text;
+  recordingStatusEl.style.color = color || "";
+}
+
+const params = new URLSearchParams(window.location.search);
+const latitude = Number.parseFloat(params.get("lat"));
+const longitude = Number.parseFloat(params.get("lon"));
+const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+
+let subscriberReady = false;
+let publisherSession = null;
+let publisher = null;
+let cameraStream = null;
+let cameraStarted = false;
+let lastAlertAt = 0;
+const ALERT_COOLDOWN_MS = 60_000;
+let wasFireDetected = false;
+
+// The actual recording (video + YOLO boxes composited together) happens
+// inside the subscriber iframe, since that's the only place both the video
+// element and the box overlay exist — this page just tells it when to start
+// capturing a clip and relays its status back into this page's own HUD.
+function beginRecordingForDetection(detectionId) {
+  document.getElementById("subscriberFrame").contentWindow.postMessage(
+    { type: "begin-recording", id: detectionId },
+    window.location.origin,
+  );
+}
+
+function setStatus(status, detail, isError) {
+  statusEl.textContent = status;
+  detailEl.textContent = detail;
+  hudEl.classList.toggle("is-error", Boolean(isError));
+}
+
+function waitForSubscriber(timeoutMs = 15000) {
+  if (subscriberReady) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (subscriberReady) {
+        clearInterval(timer);
+        resolve();
+      } else if (Date.now() - startedAt > timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("subscriber timeout"));
+      }
+    }, 100);
+  });
+}
+
+function connectSession(session, token) {
+  return new Promise((resolve, reject) => {
+    session.connect(token, error => error ? reject(error) : resolve());
+  });
+}
+
+function publishToSession(session, pub) {
+  return new Promise((resolve, reject) => {
+    session.publish(pub, error => error ? reject(error) : resolve());
+  });
+}
+
+async function reportDetection(confidence, label) {
+  if (!hasCoordinates) return; // nothing sensible to save without a location
+  try {
+    const response = await fetch("/api/camera-fires", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ latitude, longitude, confidence, label }),
+    });
+    const saved = await response.json();
+    if (!response.ok) throw new Error(saved.detail || "no se pudo guardar la detección");
+    beginRecordingForDetection(saved.id);
+    window.parent.postMessage({ type: "camera-fire-detected", detection: saved }, window.location.origin);
+  } catch (error) {
+    console.error("No se pudo reportar la detección de fuego:", error);
+  }
+}
+
+function handleYoloResult(result) {
+  const fireDetections = (result?.detections || []).filter(
+    item => ["fire", "smoke"].includes(String(item.class_name).toLowerCase()),
+  );
+  const isFireDetected = Boolean(result?.fire_or_smoke);
+
+  if (isFireDetected) {
+    const labels = fireDetections
+      .map(item => `${item.class_name} ${(Number(item.confidence || 0) * 100).toFixed(1)}%`)
+      .join(" · ");
+    setStatus("Vonage connected", labels || "fire or smoke detected");
+
+    // Rising edge only (no fire -> fire), plus a cooldown, so a fire that
+    // stays in frame for minutes doesn't write a row every ~500ms tick.
+    const now = Date.now();
+    if (!wasFireDetected && now - lastAlertAt >= ALERT_COOLDOWN_MS) {
+      lastAlertAt = now;
+      const topConfidence = fireDetections.reduce((max, item) => Math.max(max, Number(item.confidence || 0)), 0);
+      reportDetection(topConfidence, "Cámara en tiempo real");
+    }
+  } else {
+    setStatus("Vonage connected", "YOLO inference running");
+  }
+
+  wasFireDetected = isFireDetected;
+}
+
+async function startCameraStream() {
+  if (cameraStarted) return;
+  cameraStarted = true;
+
+  try {
+    setStatus("Vonage connected", "requesting camera permission");
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+
+    setStatus("Vonage connected", "waiting for subscriber");
+    await waitForSubscriber();
+
+    setStatus("Vonage connected", "publishing camera stream");
+    const response = await fetch("/api/video/credentials");
+    const creds = await response.json();
+    if (!response.ok) throw new Error(creds.detail || "credentials error");
+
+    publisherSession = OT.initSession(creds.application_id, creds.session_id);
+    await connectSession(publisherSession, creds.publisher_token);
+
+    // A real webcam is already a live MediaStream — publish its track
+    // directly, no canvas re-encoding trick needed (that's only necessary
+    // to turn a static <video src="file.mp4"> into a publishable track).
+    const videoTrack = cameraStream.getVideoTracks()[0];
+    if (!videoTrack) throw new Error("no video track available from the camera");
+
+    publisher = OT.initPublisher(null, {
+      videoSource: videoTrack,
+      audioSource: null,
+      publishAudio: false,
+      publishVideo: true,
+      name: "browser-real-time-camera",
+      insertDefaultUI: false,
+    });
+
+    await publishToSession(publisherSession, publisher);
+    setStatus("Vonage connected", "YOLO inference running");
+  } catch (error) {
+    console.error(error);
+    setStatus("Vonage connection error", error.message || String(error), true);
+  }
+}
+
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin) return;
+  const data = event.data || {};
+
+  if (data.type === "subscriber-ready") {
+    subscriberReady = true;
+    startCameraStream();
+    return;
+  }
+
+  if (data.type === "subscriber-stream") {
+    setStatus("Vonage connected", "live camera stream received");
+    return;
+  }
+
+  if (data.type === "subscriber-error") {
+    setStatus("Vonage subscriber error", data.message || "subscriber failed", true);
+    return;
+  }
+
+  if (data.type === "yolo-result") {
+    handleYoloResult(data.result);
+    return;
+  }
+
+  if (data.type === "recording-status") {
+    setRecordingStatus(data.text || "", data.color);
+    return;
+  }
+
+  if (data.type === "camera-fire-recording-saved") {
+    // The "camera-fire-detected" message already fired when the fire was
+    // first reported, before this recording existed — tell the parent app
+    // again now so it doesn't wait for its next poll to see recording_url set.
+    window.parent.postMessage({ type: "camera-fire-recording-saved", id: data.id }, window.location.origin);
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  try {
+    if (publisherSession && publisher) publisherSession.unpublish(publisher);
+  } catch (_) {}
+  try { publisher?.destroy(); } catch (_) {}
+  try { publisherSession?.disconnect(); } catch (_) {}
+  try { cameraStream?.getTracks().forEach(track => track.stop()); } catch (_) {}
+});
+
+startCameraStream();
+</script>
+</body>
+</html>

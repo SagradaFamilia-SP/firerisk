@@ -16,4 +16,5 @@ coverage/
 docs/superpowers
 backend/private.key
 backend/models/
+backend/data/
 

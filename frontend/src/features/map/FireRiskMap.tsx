@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { latLngBounds, type LatLngBounds } from 'leaflet';
 import { MapContainer, TileLayer, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
 
 import type { LayerKey } from '../../hooks/useDashboard';
 import type { FireSpread } from '../../hooks/useFireSpread';
-import type { FireDetection, MapViewport, SpreadResponse } from '../../types/api';
+import type { CameraFireDetection, FireDetection, MapViewport, SpreadResponse } from '../../types/api';
+import { cameraFireToDetection } from './cameraFireToDetection';
 import { SITE } from './geo';
 import { MapOverlays } from './MapOverlays';
 
@@ -139,10 +140,10 @@ function SpreadAutoFocus({ fireSpread, followSpread }: { fireSpread: FireSpread;
   return null;
 }
 
-export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, selectedFireId, onSelectFire, onViewport, fireSpread, followSpread = false }: {
+export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, cameraFires, selectedFireId, onSelectFire, onViewport, fireSpread, followSpread = false }: {
   layers: Record<LayerKey, boolean>;
   baseMap: 'satellite' | 'street'; initialView?: 'site' | 'global';
-  fires: FireDetection[]; selectedFireId: string | null;
+  fires: FireDetection[]; cameraFires?: CameraFireDetection[]; selectedFireId: string | null;
   onSelectFire: (id: string | null) => void; onViewport: (viewport: MapViewport) => void;
   fireSpread: FireSpread; followSpread?: boolean;
 }) {
@@ -151,6 +152,12 @@ export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, sele
   // re-center's own side effects (see ViewportObserver) don't get mistaken
   // for the user panning away from what was just selected.
   const suppressViewportUntilRef = useRef(0);
+  // SelectionAutoCenter needs camera-origin fires too (e.g. after "Ver en
+  // mapa" from the Cámaras tab), so it can fly to them just like a NASA fire.
+  const allFiresForCentering = useMemo(
+    () => [...fires, ...(cameraFires ?? []).map(cameraFireToDetection)],
+    [fires, cameraFires],
+  );
   const tile = baseMap === 'satellite'
     ? { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Tiles © Esri' }
     : { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' };
@@ -159,9 +166,9 @@ export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, sele
       <MapContainer center={initialView === 'global' ? [20, 0] : SITE} zoom={initialView === 'global' ? 2 : 12} minZoom={2} zoomControl={false} preferCanvas className="leaflet-map">
         <ZoomControl position="bottomright" />
         <TileLayer key={baseMap} url={tile.url} attribution={tile.attribution} eventHandlers={{ tileerror: () => setTileFailed(true), tileload: () => setTileFailed(false) }} />
-        <MapOverlays layers={layers} fires={fires} selectedFireId={selectedFireId} onSelectFire={onSelectFire} fireSpread={fireSpread} />
+        <MapOverlays layers={layers} fires={fires} cameraFires={cameraFires ?? []} selectedFireId={selectedFireId} onSelectFire={onSelectFire} fireSpread={fireSpread} />
         <MapController />
-        <SelectionAutoCenter fires={fires} selectedFireId={selectedFireId} suppressUntilRef={suppressViewportUntilRef} />
+        <SelectionAutoCenter fires={allFiresForCentering} selectedFireId={selectedFireId} suppressUntilRef={suppressViewportUntilRef} />
         <SpreadAutoFocus fireSpread={fireSpread} followSpread={followSpread} />
         <ViewportObserver onViewport={onViewport} suppressUntilRef={suppressViewportUntilRef} />
       </MapContainer>

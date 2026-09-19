@@ -6,10 +6,13 @@ import type { LiveFires } from '../../hooks/useLiveFires';
 import type { FireConfidence, FireDetection, FirmsSource } from '../../types/api';
 import { INTENSITY_LABELS, intensityBucket } from './intensity';
 
-const sourceLabels: Record<FirmsSource, string> = {
+const NASA_SOURCES: readonly FirmsSource[] = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT'];
+
+const sourceLabels = {
   VIIRS_NOAA20_NRT: 'NOAA-20',
   VIIRS_NOAA21_NRT: 'NOAA-21',
-};
+  CAMERA: 'Cámara',
+} satisfies Record<FireDetection['source'], string>;
 
 const confidenceLabels: Record<FireConfidence, string> = { low: 'Baja', nominal: 'Nominal', high: 'Alta' };
 const confidenceRank: Record<FireConfidence, number> = { low: 0, nominal: 1, high: 2 };
@@ -240,7 +243,7 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
         )}
         <div className="fire-table__toolbar-row fire-table__toolbar-row--meta">
           <div className="source-toggles">
-            {(Object.keys(sourceLabels) as FirmsSource[]).map((source) => (
+            {NASA_SOURCES.map((source) => (
               <label key={source}><input type="checkbox" checked={filters.sources.includes(source)} onChange={() => toggleSource(source)} /> {sourceLabels[source]}</label>
             ))}
           </div>

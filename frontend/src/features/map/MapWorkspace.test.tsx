@@ -18,7 +18,7 @@ vi.mock('./ForecastTimeline', () => ({
 }));
 
 const dashboard = {
-  layers: { fire: true, spread: true },
+  layers: { fire: true, spread: true, camera: true },
   baseMap: 'satellite',
   setBaseMap: () => undefined,
 };
@@ -38,9 +38,17 @@ const fireSpread = {
   setHour: () => undefined,
 };
 
+const cameraFires = {
+  fires: [],
+  status: 'idle' as const,
+  error: null,
+  notification: null,
+  dismissNotification: () => undefined,
+};
+
 describe('MapWorkspace', () => {
   it('starts in the full map view', () => {
-    render(<MapWorkspace dashboard={dashboard as never} liveFires={liveFires as never} fireSpread={fireSpread} />);
+    render(<MapWorkspace dashboard={dashboard as never} liveFires={liveFires as never} fireSpread={fireSpread} cameraFires={cameraFires} />);
 
     expect(screen.getByTestId('fire-risk-map')).toHaveAttribute('data-initial-view', 'global');
   });
@@ -51,6 +59,7 @@ describe('MapWorkspace', () => {
         dashboard={dashboard as never}
         liveFires={{ ...liveFires, selectedFireId: 'fire-1' } as never}
         fireSpread={fireSpread}
+        cameraFires={cameraFires}
       />,
     );
 
@@ -63,7 +72,7 @@ describe('MapWorkspace', () => {
   });
 
   it('hides the Vonage YOLO camera action until a fire is selected', () => {
-    render(<MapWorkspace dashboard={dashboard as never} liveFires={liveFires as never} fireSpread={fireSpread} />);
+    render(<MapWorkspace dashboard={dashboard as never} liveFires={liveFires as never} fireSpread={fireSpread} cameraFires={cameraFires} />);
 
     expect(screen.queryByRole('button', { name: /abrir streaming vonage yolo/i })).not.toBeInTheDocument();
   });

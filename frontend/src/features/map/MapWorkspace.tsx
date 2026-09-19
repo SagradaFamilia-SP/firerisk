@@ -1,8 +1,10 @@
 import { useState } from 'react';
 
 import type { useDashboard } from '../../hooks/useDashboard';
+import type { CameraFires } from '../../hooks/useCameraFires';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
+import { cameraDetectionId } from './cameraFireToDetection';
 import { FireRiskMap } from './FireRiskMap';
 import { ForecastTimeline } from './ForecastTimeline';
 import { MapToolbar } from './MapToolbar';
@@ -11,12 +13,15 @@ import { VonageYoloStreamButton } from './VonageYoloStreamModal';
 
 type Dashboard = ReturnType<typeof useDashboard>;
 
-export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: Dashboard; liveFires: LiveFires; fireSpread: FireSpread }) {
+export function MapWorkspace({ dashboard, liveFires, fireSpread, cameraFires }: {
+  dashboard: Dashboard; liveFires: LiveFires; fireSpread: FireSpread; cameraFires: CameraFires;
+}) {
   const [centerKey, setCenterKey] = useState(0);
   const [view, setView] = useState<'site' | 'global'>('global');
   const [timelinePlaying, setTimelinePlaying] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
   const hasSelectedFire = Boolean(liveFires.selectedFireId);
+  const selectedCameraFire = cameraFires.fires.find((fire) => cameraDetectionId(fire.id) === liveFires.selectedFireId) ?? null;
 
   return (
     <div className="map-workspace">
@@ -26,6 +31,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: 
         baseMap={dashboard.baseMap}
         initialView={view}
         fires={sampleFiresForRender(liveFires.state.data?.detections ?? [])}
+        cameraFires={cameraFires.fires}
         selectedFireId={liveFires.selectedFireId}
         onSelectFire={liveFires.setSelectedFireId}
         onViewport={liveFires.updateViewport}
@@ -43,6 +49,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: 
           open={streamOpen}
           onOpen={() => setStreamOpen(true)}
           onClose={() => setStreamOpen(false)}
+          recordingUrl={selectedCameraFire?.recording_url ?? null}
         />
       )}
       {fireSpread.data && <ForecastTimeline hour={fireSpread.hour} onChange={fireSpread.setHour} onPlayingChange={setTimelinePlaying} />}

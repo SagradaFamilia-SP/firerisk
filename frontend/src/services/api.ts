@@ -1,4 +1,5 @@
 import type {
+  CameraFireDetection,
   ChatMessage,
   ChatResponse,
   FireFilters,
@@ -70,6 +71,7 @@ export const apiClient = {
   },
   chat: (message: string, history: ChatMessage[], signal?: AbortSignal) =>
     request<ChatResponse>('/chat', { method: 'POST', body: JSON.stringify({ message, history }), signal }),
+  cameraFires: (signal?: AbortSignal) => request<CameraFireDetection[]>('/camera-fires', { signal }),
 };
 
 export function getErrorMessage(error: unknown): string {

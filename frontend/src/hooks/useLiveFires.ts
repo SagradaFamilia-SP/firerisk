@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiClient, getErrorMessage } from '../services/api';
+import { isCameraDetectionId } from '../features/map/cameraFireToDetection';
 import type { FireFilters, FireResponse, MapViewport } from '../types/api';
 import type { AsyncState } from './useDashboard';
 
@@ -81,6 +82,9 @@ export function useLiveFires() {
     setViewport(nextViewport);
     setSelectedFireId((currentSelectedFireId) => {
       if (!currentSelectedFireId) return currentSelectedFireId;
+      // Camera detections aren't fetched per-viewport (unlike NASA fires), so
+      // panning/zooming away from one should never auto-deselect it.
+      if (isCameraDetectionId(currentSelectedFireId)) return currentSelectedFireId;
       const selectedFire = stateRef.current.data?.detections.find((fire) => fire.id === currentSelectedFireId);
       if (!selectedFire || viewportContainsFire(nextViewport, selectedFire)) return currentSelectedFireId;
       return null;

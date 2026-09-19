@@ -77,7 +77,8 @@
     #label { left: 8px; }
     #fps { right: 8px; }
 
-    #inferenceCanvas {
+    #inferenceCanvas,
+    #recordCanvas {
       display: none;
     }
   </style>
@@ -97,6 +98,11 @@
   <!-- Hidden canvas used to send frames to FastAPI/YOLO -->
   <canvas id="inferenceCanvas"></canvas>
 
+  <!-- Hidden canvas: video + YOLO boxes composited together, this is what
+       actually gets recorded, so a saved clip shows the same boxes as the
+       live view instead of a plain, unannotated camera feed. -->
+  <canvas id="recordCanvas"></canvas>
+
 <script>
 const stage = document.getElementById("stage");
 const label = document.getElementById("label");
@@ -107,6 +113,9 @@ const overlayCtx = overlay.getContext("2d");
 
 const inferenceCanvas = document.getElementById("inferenceCanvas");
 const inferenceCtx = inferenceCanvas.getContext("2d");
+
+const recordCanvas = document.getElementById("recordCanvas");
+const recordCtx = recordCanvas.getContext("2d");
 
 let session = null;
 let remoteVideo = null;
@@ -284,6 +293,141 @@ function drawDetections() {
       x + paddingX,
       labelY + labelHeight / 2
     );
+  }
+}
+
+/*
+  Composites the live video frame plus the current YOLO box overlay into a
+  single hidden canvas, continuously (~display refresh rate), so that
+  canvas's own captureStream() can feed a MediaRecorder — matching exactly
+  what's already drawn on screen (same rect math as the visible overlay).
+*/
+function renderRecordFrame() {
+  const stageRect = stage.getBoundingClientRect();
+  const width = Math.max(1, Math.round(stageRect.width));
+  const height = Math.max(1, Math.round(stageRect.height));
+
+  if (recordCanvas.width !== width || recordCanvas.height !== height) {
+    recordCanvas.width = width;
+    recordCanvas.height = height;
+  }
+
+  recordCtx.fillStyle = "#050607";
+  recordCtx.fillRect(0, 0, width, height);
+
+  if (remoteVideo && remoteVideo.videoWidth) {
+    const videoRect = getContainedVideoRect();
+    recordCtx.drawImage(remoteVideo, videoRect.x, videoRect.y, videoRect.width, videoRect.height);
+  }
+
+  recordCtx.drawImage(overlay, 0, 0, width, height);
+
+  requestAnimationFrame(renderRecordFrame);
+}
+
+const RECORD_FPS = 24;
+const ROLLING_WINDOW_MS = 12_000;
+const POST_DETECTION_MS = 6_000;
+const RECORDER_MIME_CANDIDATES = [
+  "video/webm;codecs=vp9",
+  "video/webm;codecs=vp8",
+  "video/webm",
+  // Safari's MediaRecorder doesn't support WebM at all — only MP4/H.264.
+  "video/mp4;codecs=h264",
+  "video/mp4",
+];
+
+let mediaRecorder = null;
+let rollingChunks = []; // recent {ts, blob} pairs, used to prepend footage from just before the alert fired
+let pendingRecording = null; // { id, chunks, mimeType } while capturing the clip for a just-reported detection
+
+function pickRecorderMimeType() {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return undefined;
+  return RECORDER_MIME_CANDIDATES.find(type => MediaRecorder.isTypeSupported(type));
+}
+
+function extensionForMimeType(mimeType) {
+  return mimeType.includes("mp4") ? "mp4" : "webm";
+}
+
+function reportRecordingStatus(text, color) {
+  parentMessage("recording-status", { text, color });
+}
+
+function startRecorder() {
+  if (typeof MediaRecorder === "undefined") {
+    reportRecordingStatus("Grabación no soportada en este navegador", "#ff8b8b");
+    return;
+  }
+  try {
+    const recordStream = recordCanvas.captureStream(RECORD_FPS);
+    const mimeType = pickRecorderMimeType();
+    mediaRecorder = new MediaRecorder(recordStream, mimeType ? { mimeType } : undefined);
+  } catch (error) {
+    console.error("No se pudo iniciar la grabación con detecciones:", error);
+    reportRecordingStatus(`Grabación no disponible: ${error.message || error}`, "#ff8b8b");
+    return;
+  }
+
+  mediaRecorder.addEventListener("error", event => {
+    console.error("Error del grabador de vídeo:", event.error);
+    reportRecordingStatus(`Error de grabación: ${event.error?.message || event.error}`, "#ff8b8b");
+  });
+
+  mediaRecorder.addEventListener("dataavailable", event => {
+    if (!event.data || event.data.size === 0) return;
+
+    rollingChunks.push({ ts: Date.now(), blob: event.data });
+    const cutoff = Date.now() - ROLLING_WINDOW_MS;
+    while (rollingChunks.length && rollingChunks[0].ts < cutoff) rollingChunks.shift();
+
+    if (pendingRecording) pendingRecording.chunks.push(event.data);
+  });
+
+  mediaRecorder.start(1000);
+  reportRecordingStatus("Grabación en espera de detección", "#9fd6ff");
+}
+
+function beginRecordingForDetection(detectionId) {
+  if (!mediaRecorder) {
+    reportRecordingStatus("Sin grabador activo; no se guardará vídeo de este fuego", "#ff8b8b");
+    return;
+  }
+  if (pendingRecording) return; // a clip is already being captured, don't overlap
+  pendingRecording = {
+    id: detectionId,
+    chunks: rollingChunks.map(item => item.blob), // include a few seconds before the alert too
+    mimeType: mediaRecorder.mimeType || "video/webm",
+  };
+  reportRecordingStatus(`Grabando clip del fuego #${detectionId}…`, "#ff8b57");
+  // A fixed timer (rather than reacting to the next `dataavailable` tick)
+  // guarantees this always finalizes and clears `pendingRecording`, even if
+  // the recorder stalls — otherwise a single missed tick would wedge
+  // `pendingRecording` forever and silently block every later detection's
+  // recording too.
+  window.setTimeout(() => finalizePendingRecording(detectionId), POST_DETECTION_MS);
+}
+
+async function finalizePendingRecording(detectionId) {
+  if (!pendingRecording || pendingRecording.id !== detectionId) return;
+  const { id, chunks, mimeType } = pendingRecording;
+  pendingRecording = null;
+  if (!chunks.length) {
+    reportRecordingStatus(`Sin fotogramas capturados para el fuego #${id}`, "#ff8b8b");
+    return;
+  }
+
+  reportRecordingStatus(`Subiendo grabación del fuego #${id}…`, "#9fd6ff");
+  const formData = new FormData();
+  formData.append("file", new Blob(chunks, { type: mimeType }), `camera-fire-${id}.${extensionForMimeType(mimeType)}`);
+  try {
+    const response = await fetch(`/api/camera-fires/${id}/recording`, { method: "POST", body: formData });
+    if (!response.ok) throw new Error(`upload failed with status ${response.status}`);
+    reportRecordingStatus(`Grabación del fuego #${id} guardada`, "#31c48d");
+    parentMessage("camera-fire-recording-saved", { id });
+  } catch (error) {
+    console.error("No se pudo guardar la grabación del fuego detectado:", error);
+    reportRecordingStatus(`No se pudo guardar la grabación del fuego #${id}`, "#ff8b8b");
   }
 }
 
@@ -482,6 +626,8 @@ async function startSubscriber() {
             500
           );
         }
+
+        if (!mediaRecorder) startRecorder();
       });
     });
 
@@ -531,7 +677,17 @@ async function startSubscriber() {
   }
 }
 
+window.addEventListener("message", event => {
+  if (event.origin !== window.location.origin) return;
+  const data = event.data || {};
+
+  if (data.type === "begin-recording" && typeof data.id !== "undefined") {
+    beginRecordingForDetection(data.id);
+  }
+});
+
 startSubscriber();
+requestAnimationFrame(renderRecordFrame);
 </script>
 </body>
 </html>

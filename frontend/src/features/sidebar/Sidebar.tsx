@@ -1,4 +1,4 @@
-import { Bot, ChevronsLeft, ChevronsRight, Flame, Info, LogOut, Map, PanelsTopLeft, Settings } from 'lucide-react';
+import { Bot, Camera, ChevronsLeft, ChevronsRight, Flame, Info, LogOut, Map, PanelsTopLeft, Settings } from 'lucide-react';
 
 import pyrosLogo from '../../assets/pyros-logo.png';
 import type { LayerKey } from '../../hooks/useDashboard';
@@ -37,6 +37,9 @@ export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer, ac
         </button>
         <button type="button" className={`module-item ${activeModule === 'chat' ? 'is-active' : ''}`} aria-current={activeModule === 'chat' ? 'page' : undefined} onClick={() => onSelectModule('chat')}>
           <span><Bot size={18} /><span className="module-item__text">Chat Asistente</span></span>{activeModule === 'chat' ? <b>ACTIVO</b> : <small>AI AGENT</small>}
+        </button>
+        <button type="button" className={`module-item ${activeModule === 'cameras' ? 'is-active' : ''}`} aria-current={activeModule === 'cameras' ? 'page' : undefined} onClick={() => onSelectModule('cameras')}>
+          <span><Camera size={18} /><span className="module-item__text">Cámaras</span></span>{activeModule === 'cameras' ? <b>ACTIVO</b> : <small>YOLO</small>}
         </button>
         <a className="module-item" href="#about">
           <span><Info size={18} /><span className="module-item__text">About</span></span><small>v2.4.1</small>

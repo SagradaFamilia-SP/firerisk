@@ -39,7 +39,7 @@ const meta = {
 
 describe('LiveFirePanel', () => {
   it('shows real satellite detail, stale state and anomaly disclaimer', () => {
-    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id)} fireSpread={idleFireSpread} fireReport={idleFireReport} />);
+    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id)} fireSpread={idleFireSpread} fireReport={idleFireReport} selectedFire={detection} />);
     expect(screen.getByText(/18.7 MW/)).toBeInTheDocument();
     expect(screen.getByText(/341.2 K/)).toBeInTheDocument();
     expect(screen.getByText(/Noche/)).toBeInTheDocument();
@@ -49,7 +49,7 @@ describe('LiveFirePanel', () => {
 
   it('opens a right-side selected fire menu with location and close action', () => {
     const setSelectedFireId = vi.fn();
-    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id, setSelectedFireId)} fireSpread={idleFireSpread} fireReport={idleFireReport} />);
+    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id, setSelectedFireId)} fireSpread={idleFireSpread} fireReport={idleFireReport} selectedFire={detection} />);
     expect(screen.getByRole('region', { name: 'Detalle del fuego seleccionado' })).toBeInTheDocument();
     expect(screen.getByText('Incendio seleccionado')).toBeInTheDocument();
     expect(screen.getByText('39.6810, -6.3470')).toBeInTheDocument();
@@ -65,6 +65,7 @@ describe('LiveFirePanel', () => {
         liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id)}
         fireSpread={idleFireSpread}
         fireReport={idleFireReport}
+        selectedFire={detection}
         reverseLocation={{
           status: 'success',
           data: {
@@ -90,6 +91,7 @@ describe('LiveFirePanel', () => {
         liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id)}
         fireSpread={idleFireSpread}
         fireReport={idleFireReport}
+        selectedFire={detection}
         reverseLocation={{ status: 'loading', data: null, error: null }}
       />,
     );
@@ -97,7 +99,7 @@ describe('LiveFirePanel', () => {
   });
 
   it('states an empty fresh viewport without inventing a fire', () => {
-    render(<LiveFirePanel liveFires={liveFires({ detections: [], meta: { ...meta, sources: [...meta.sources], count: 0, stale: false, latest_acquisition: null } })} fireSpread={idleFireSpread} fireReport={idleFireReport} />);
+    render(<LiveFirePanel liveFires={liveFires({ detections: [], meta: { ...meta, sources: [...meta.sources], count: 0, stale: false, latest_acquisition: null } })} fireSpread={idleFireSpread} fireReport={idleFireReport} selectedFire={null} />);
     expect(screen.getByText('Sin detecciones en esta vista.')).toBeInTheDocument();
     expect(screen.queryByText(/Detección VIIRS real/)).not.toBeInTheDocument();
   });

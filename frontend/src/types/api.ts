@@ -3,11 +3,12 @@ export interface HealthResponse {
 }
 
 export type FirmsSource = 'VIIRS_NOAA20_NRT' | 'VIIRS_NOAA21_NRT';
+export type FireSource = FirmsSource | 'CAMERA';
 export type FireConfidence = 'low' | 'nominal' | 'high';
 
 export interface FireDetection {
   id: string; latitude: number; longitude: number; acquired_at: string;
-  satellite: string; instrument: string; source: FirmsSource;
+  satellite: string; instrument: string; source: FireSource;
   confidence: FireConfidence; brightness: number; brightness_ti5: number | null;
   frp: number | null; scan: number | null; track: number | null;
   daynight: 'day' | 'night';
@@ -63,3 +64,9 @@ export interface ChatSummary {
 }
 
 export interface ChatResponse { reply: string; fires: FireDetection[]; summary: ChatSummary }
+
+export interface CameraFireDetection {
+  id: number; latitude: number; longitude: number; confidence: number;
+  label: string; source: 'camera'; detected_at: string;
+  recording_url: string | null;
+}

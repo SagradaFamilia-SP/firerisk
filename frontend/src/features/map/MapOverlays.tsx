@@ -17,9 +17,9 @@ export function MapOverlays({ layers, fires, selectedFireId, onSelectFire, fireS
 }) {
   const fireHour = fireSpread.data ? Math.min(fireSpread.hour, fireSpread.data.max_hours) : 0;
   const fireSnapshot = fireSpread.data?.snapshots[fireHour] ?? null;
-  const firePolygon: [number, number][] = fireSnapshot && fireSnapshot.radius_km_max > 0
-    ? fireSnapshot.polygon.map((point): [number, number] => [point.lat, point.lon])
-    : [];
+  const fireRings: [number, number][][] = (fireSnapshot?.rings ?? [])
+    .map((ring) => ring.map((point): [number, number] => [point.lat, point.lon]))
+    .filter((ring) => ring.length >= 3);
   return (
     <>
       {layers.fire && <LayerGroup>{fires.map((fire) => <CircleMarker
@@ -29,9 +29,9 @@ export function MapOverlays({ layers, fires, selectedFireId, onSelectFire, fireS
         pathOptions={{ color: fire.confidence === 'high' ? '#ffe08a' : '#ff8b57', weight: selectedFireId === fire.id ? 3 : 1, fillColor: '#f0442f', fillOpacity: 0.82 }}
         eventHandlers={{ click: () => onSelectFire(fire.id) }}
       ><Tooltip direction="top">{fire.satellite} · {fire.confidence} · FRP {fire.frp?.toFixed(1) ?? '—'} MW</Tooltip><Popup><strong>Detección VIIRS real</strong><br />{new Date(fire.acquired_at).toLocaleString('es-ES')}<br />FRP: {fire.frp?.toFixed(1) ?? '—'} MW</Popup></CircleMarker>)}</LayerGroup>}
-      {layers.spread && firePolygon.length >= 3 && <Polygon positions={firePolygon} pathOptions={{ color: '#ff2d1f', weight: 2.5, fillColor: '#ff5a3d', fillOpacity: 0.28 }}>
-        <Tooltip>Propagación direccional real · +{fireHour} h · radio máx {fireSnapshot?.radius_km_max.toFixed(2)} km</Tooltip>
-      </Polygon>}
+      {layers.spread && fireRings.length > 0 && <LayerGroup>{fireRings.map((ring, index) => <Polygon key={index} positions={ring} pathOptions={{ color: '#ff2d1f', weight: 2.5, fillColor: '#ff5a3d', fillOpacity: 0.28 }}>
+        <Tooltip>Propagación real (rejilla) · +{fireHour} h · radio máx {fireSnapshot?.radius_km_max.toFixed(2)} km</Tooltip>
+      </Polygon>)}</LayerGroup>}
     </>
   );
 }

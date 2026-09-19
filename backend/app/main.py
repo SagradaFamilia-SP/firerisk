@@ -8,7 +8,7 @@ from app.core.config import get_settings
 def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
-        title="IGNIS API",
+        title="PYROS API",
         description="Wildfire intelligence and operational planning API",
         version="1.0.0",
     )

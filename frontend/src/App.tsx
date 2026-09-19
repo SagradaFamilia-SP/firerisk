@@ -29,12 +29,17 @@ export default function App() {
   const selectedFire = allDetections.find((fire) => fire.id === liveFires.selectedFireId) ?? null;
   const reverseLocation = useReverseLocation(selectedFire);
   const fireReport = useFireReport(selectedFire, reverseLocation, fireSpread);
+  const simulationPointLocation = simulation.point
+    ? { latitude: simulation.point.lat, longitude: simulation.point.lon }
+    : null;
+  const simulationReverseLocation = useReverseLocation(simulationPointLocation);
   return (
     <AppShell
       dashboard={dashboard}
       liveFires={liveFires}
       fireSpread={fireSpread}
       reverseLocation={reverseLocation}
+      simulationReverseLocation={simulationReverseLocation}
       chat={chat}
       fireReport={fireReport}
       simulation={simulation}

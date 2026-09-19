@@ -7,6 +7,8 @@ class SpreadRequest(BaseModel):
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
     max_hours: int = Field(default=12, ge=1, le=24)
+    frp_mw: float = Field(default=4.9, ge=0.1, le=500)
+    brightness_k: float = Field(default=336.6, ge=250, le=500)
 
 
 class SpreadPoint(BaseModel):
@@ -24,6 +26,7 @@ class SpreadSnapshot(BaseModel):
     intensity_kw_m_min: float
     intensity_kw_m_mean: float
     intensity_kw_m_max: float
+    burned_area_by_fuel_km2: dict[str, float]
 
 
 class WeatherSample(BaseModel):
@@ -44,3 +47,4 @@ class SpreadResponse(BaseModel):
     snapshots: list[SpreadSnapshot]
     warning: str
     model_notes: list[str]
+    scenario: dict[str, float]

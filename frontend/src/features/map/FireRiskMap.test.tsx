@@ -80,10 +80,11 @@ describe('FireRiskMap', () => {
         weather: [],
         warning: '',
         model_notes: [],
+        scenario: { frp_mw: 4.9, brightness_k: 336.6, spread_multiplier: 1 },
         snapshots: [
           {
             hour: 0, radius_km_min: 0, radius_km_mean: 0, radius_km_max: 0, area_km2: 0, rings: [],
-            intensity_kw_m_min: 0, intensity_kw_m_mean: 0, intensity_kw_m_max: 0,
+            intensity_kw_m_min: 0, intensity_kw_m_mean: 0, intensity_kw_m_max: 0, burned_area_by_fuel_km2: {},
           },
           {
             hour: 1,
@@ -92,7 +93,7 @@ describe('FireRiskMap', () => {
             radius_km_max: 0.3,
             area_km2: 0.1,
             rings: [[{ lat: 39.7, lon: -6.2 }, { lat: 39.71, lon: -6.19 }, { lat: 39.69, lon: -6.18 }]],
-            intensity_kw_m_min: 500, intensity_kw_m_mean: 800, intensity_kw_m_max: 1200,
+            intensity_kw_m_min: 500, intensity_kw_m_mean: 800, intensity_kw_m_max: 1200, burned_area_by_fuel_km2: {},
           },
           {
             hour: 2,
@@ -101,7 +102,7 @@ describe('FireRiskMap', () => {
             radius_km_max: 0.4,
             area_km2: 0.2,
             rings: [[{ lat: 39.7, lon: -6.2 }, { lat: 39.72, lon: -6.18 }, { lat: 39.68, lon: -6.17 }]],
-            intensity_kw_m_min: 600, intensity_kw_m_mean: 900, intensity_kw_m_max: 1400,
+            intensity_kw_m_min: 600, intensity_kw_m_mean: 900, intensity_kw_m_max: 1400, burned_area_by_fuel_km2: {},
           },
         ],
       },
@@ -163,6 +164,7 @@ describe('FireRiskMap', () => {
         weather: [],
         warning: '',
         model_notes: [],
+        scenario: { frp_mw: 4.9, brightness_k: 336.6, spread_multiplier: 1 },
         snapshots: [
           {
             hour: 0,
@@ -171,7 +173,7 @@ describe('FireRiskMap', () => {
             radius_km_max: 0.3,
             area_km2: 0.1,
             rings: [[{ lat: 39.7, lon: -6.2 }, { lat: 39.71, lon: -6.19 }, { lat: 39.69, lon: -6.18 }]],
-            intensity_kw_m_min: 0, intensity_kw_m_mean: 0, intensity_kw_m_max: 0,
+            intensity_kw_m_min: 0, intensity_kw_m_mean: 0, intensity_kw_m_max: 0, burned_area_by_fuel_km2: {},
           },
         ],
       },

@@ -228,6 +228,29 @@ def test_build_snapshots_reports_intensity_growing_with_the_active_front() -> No
         assert snapshot.intensity_kw_m_min <= snapshot.intensity_kw_m_mean <= snapshot.intensity_kw_m_max
 
 
+def test_build_snapshots_breaks_down_burned_area_by_real_fuel_type() -> None:
+    rows = cols = 15
+    lat_grid, lon_grid = make_grid(41.70, 2.10, rows, 100.0)
+    fuel_models = np.full((rows, cols), FM3, dtype=object)  # uniform "Tall grass"
+    burnable = np.ones((rows, cols), dtype=bool)
+    slope = np.zeros((rows, cols))
+    upslope = np.zeros((rows, cols))
+    center = (rows // 2, cols // 2)
+
+    arrival, ros_at_arrival = simulate_grid(
+        [DRY_HOT_WEATHER] * 8, fuel_models, burnable, slope, upslope, [center], cell_size_m=100.0, max_hours=6
+    )
+    snapshots = build_snapshots(arrival, ros_at_arrival, fuel_models, lat_grid, lon_grid, 41.70, 2.10, 100.0, 6)
+
+    with_area = [s for s in snapshots if s.area_km2 > 0]
+    assert with_area, "expected at least one hour with burned area"
+    for snapshot in with_area:
+        # A uniform fuel grid means the whole burned area is a single type,
+        # and it must sum to the same area already reported for that hour.
+        assert set(snapshot.burned_area_by_fuel_km2) == {FM3.name}
+        assert snapshot.burned_area_by_fuel_km2[FM3.name] == pytest.approx(snapshot.area_km2, abs=0.01)
+
+
 def test_ignition_pixel_misclassified_still_burns() -> None:
     """
     Regression test: the reference models force-seeds the ignition cell
@@ -333,6 +356,8 @@ async def test_simulate_spread_returns_snapshot_per_hour(monkeypatch: pytest.Mon
     result = await simulate_spread(lat=41.70, lon=2.10, max_hours=3)
 
     assert result.terrain_source == "open-meteo-dem"
+    assert result.scenario["frp_mw"] == 4.9
+    assert result.scenario["brightness_k"] == 336.6
     assert result.fuel_source == "esa-worldcover"
     assert len(result.ignition_points) == 1
     assert len(result.snapshots) == 4
@@ -343,6 +368,45 @@ async def test_simulate_spread_returns_snapshot_per_hour(monkeypatch: pytest.Mon
     assert radii == sorted(radii)
     assert radii[-1] > radii[0]
     assert any(len(snapshot.rings) > 0 for snapshot in result.snapshots[1:])
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_simulation_scenario_frp_and_brightness_change_spread(monkeypatch: pytest.MonkeyPatch) -> None:
+    respx.get(WEATHER_URL).mock(
+        return_value=Response(
+            200,
+            json={
+                "hourly": {
+                    "time": [f"2026-09-19T{hour:02d}:00" for hour in range(25)],
+                    "temperature_2m": [32.0] * 25,
+                    "relative_humidity_2m": [15.0] * 25,
+                    "precipitation": [0.0] * 25,
+                    "wind_speed_10m": [30.0] * 25,
+                    "wind_direction_10m": [270.0] * 25,
+                    "wind_gusts_10m": [35.0] * 25,
+                }
+            },
+        )
+    )
+
+    def _elevation_response(request):
+      count = len(request.url.params.get("latitude", "").split(",")) if request.url.params.get("latitude") else 0
+      return Response(200, json={"elevation": [100] * count})
+
+    respx.get(ELEVATION_URL).mock(side_effect=_elevation_response)
+
+    async def fake_worldcover(points: list[tuple[float, float]]) -> list[int]:
+        return [30] * len(points)
+
+    monkeypatch.setattr(spread, "sample_worldcover_classes", fake_worldcover)
+    monkeypatch.setattr(spread, "get_firms_service", lambda: _FakeFirmsService(error=FirmsUnavailableError("down")))
+
+    low = await simulate_spread(lat=41.70, lon=2.10, max_hours=3, frp_mw=1.0, brightness_k=310.0)
+    high = await simulate_spread(lat=41.70, lon=2.10, max_hours=3, frp_mw=50.0, brightness_k=390.0)
+
+    assert high.scenario["spread_multiplier"] > low.scenario["spread_multiplier"]
+    assert high.snapshots[-1].area_km2 > low.snapshots[-1].area_km2
 
 
 @respx.mock

@@ -30,7 +30,7 @@ export interface FireFilters {
   hours: 24 | 48 | 72; sources: FirmsSource[]; minConfidence: FireConfidence;
 }
 
-export interface SpreadRequest { lat: number; lon: number; max_hours?: number }
+export interface SpreadRequest { lat: number; lon: number; max_hours?: number; frp_mw?: number; brightness_k?: number }
 
 export interface SpreadPoint { lat: number; lon: number }
 
@@ -38,6 +38,7 @@ export interface SpreadSnapshot {
   hour: number; radius_km_min: number; radius_km_max: number; radius_km_mean: number;
   area_km2: number; rings: SpreadPoint[][];
   intensity_kw_m_min: number; intensity_kw_m_mean: number; intensity_kw_m_max: number;
+  burned_area_by_fuel_km2: Record<string, number>;
 }
 
 export interface SpreadResponse {
@@ -48,6 +49,7 @@ export interface SpreadResponse {
   snapshots: SpreadSnapshot[];
   warning: string;
   model_notes: string[];
+  scenario: Record<string, number>;
 }
 
 export interface ReverseLocationResponse {
@@ -70,3 +72,5 @@ export interface CameraFireDetection {
   label: string; source: 'camera'; detected_at: string;
   recording_url: string | null;
 }
+
+export interface TranscriptionResponse { text: string }

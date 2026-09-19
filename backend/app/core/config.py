@@ -17,7 +17,11 @@ class Settings(BaseSettings):
     firms_wms_cache_ttl_seconds: int = 900
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     nominatim_cache_ttl_seconds: int = 86_400
-    nominatim_user_agent: str = "IGNIS Wildfire Intelligence demo contact: local-dev"
+    nominatim_user_agent: str = "PYROS Wildfire Intelligence demo contact: local-dev"
+    speech_api_key: str | None = None
+    speech_base_url: str = "https://api.slng.ai"
+    speech_model: str = "deepgram/nova:3"
+    speech_language: str = "es"
 
     @field_validator("frontend_origins", mode="before")
     @classmethod

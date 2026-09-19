@@ -8,6 +8,7 @@ app/api/routes/chat.py
 app/api/routes/fires.py
 app/api/routes/health.py
 app/api/routes/location.py
+app/api/routes/speech.py
 app/api/routes/spread.py
 app/api/routes/video.py
 app/api/routes/weather.py
@@ -18,6 +19,7 @@ app/schemas/chat.py
 app/schemas/fires.py
 app/schemas/health.py
 app/schemas/location.py
+app/schemas/speech.py
 app/schemas/spread.py
 app/schemas/weather.py
 app/services/__init__.py
@@ -26,6 +28,7 @@ app/services/chat.py
 app/services/firms.py
 app/services/location.py
 app/services/model_client.py
+app/services/speech.py
 app/services/spread.py
 app/services/weather.py
 ignis_backend.egg-info/PKG-INFO

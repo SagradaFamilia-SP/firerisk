@@ -90,6 +90,8 @@ const simulation = {
   point: null,
   pick: () => undefined,
   clear: () => undefined,
+  scenario: { frpMw: 4.9, brightnessK: 336.6 },
+  updateScenario: () => undefined,
   status: 'idle' as const,
   data: null,
   error: null,
@@ -106,7 +108,7 @@ const cameraFires = {
 };
 
 describe('AppShell tactical layout', () => {
-  it('renders the IGNIS tactical chrome around the live map workspace', () => {
+  it('renders the PYROS tactical chrome around the live map workspace', () => {
     render(
       <AppShell
         dashboard={dashboard as never}
@@ -254,5 +256,57 @@ describe('AppShell tactical layout', () => {
     fireEvent.click(toggle);
     expect(screen.getByLabelText('Contexto territorial')).toHaveClass('is-collapsed');
     expect(screen.getByRole('button', { name: 'Expandir menú' })).toBeInTheDocument();
+  });
+
+  it('opens the about module from the sidebar', () => {
+    render(
+      <AppShell
+        dashboard={dashboard as never}
+        liveFires={liveFires}
+        fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
+        cameraFires={cameraFires}
+        map={<div aria-label="Mapa táctico">map</div>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /About/ }));
+    expect(screen.getByRole('region', { name: 'About PYROS' })).toBeInTheDocument();
+    expect(screen.getByText('Detección, telemetría y simulación de incendios')).toBeInTheDocument();
+    expect(screen.getByText('Limitaciones')).toBeInTheDocument();
+  });
+
+  it('opens configuration as a closable card over the current workspace', () => {
+    render(
+      <AppShell
+        dashboard={dashboard as never}
+        liveFires={liveFires}
+        fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
+        cameraFires={cameraFires}
+        map={<div aria-label="Mapa táctico">map</div>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir configuración' }));
+    expect(screen.getByLabelText('Mapa táctico')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Configuración operativa' })).toBeInTheDocument();
+    expect(screen.getByText('Capas operativas')).toBeInTheDocument();
+    expect(screen.getByText('NASA FIRMS · VIIRS')).toBeInTheDocument();
+    expect(screen.getByText('Propagación estimada')).toBeInTheDocument();
+    expect(screen.getByText('Fuentes satelitales')).toBeInTheDocument();
+    expect(screen.getByText('Mapa y visualización')).toBeInTheDocument();
+    expect(screen.getByText('Alertas operativas')).toBeInTheDocument();
+    expect(screen.getByText('2/2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar configuración' }));
+    expect(screen.queryByRole('dialog', { name: 'Configuración operativa' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir configuración' }));
+    expect(screen.getByRole('dialog', { name: 'Configuración operativa' })).toBeInTheDocument();
   });
 });

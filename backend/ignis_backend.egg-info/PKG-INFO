@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: ignis-backend
 Version: 0.1.0
-Summary: IGNIS wildfire intelligence API
+Summary: PYROS wildfire intelligence API
 Requires-Python: >=3.11
 Requires-Dist: fastapi<1,>=0.110
 Requires-Dist: httpx<1,>=0.27

@@ -1,7 +1,8 @@
-import { Bot, Send, User } from 'lucide-react';
+import { Bot, Loader2, Mic, Send, Square, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Chat } from '../../hooks/useChat';
+import { apiClient, getErrorMessage } from '../../services/api';
 import type { FireConfidence } from '../../types/api';
 
 const confidenceLabels: Record<FireConfidence, string> = { low: 'Baja', nominal: 'Nominal', high: 'Alta' };
@@ -15,6 +16,11 @@ const SUGGESTIONS = [
 export function ChatPanel({ chat }: { chat: Chat }) {
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -26,8 +32,50 @@ export function ChatPanel({ chat }: { chat: Chat }) {
     setDraft('');
   };
 
+  const startRecording = async () => {
+    setVoiceError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        if (audioBlob.size === 0) return;
+        setTranscribing(true);
+        try {
+          const { text } = await apiClient.transcribeAudio(audioBlob);
+          if (text) setDraft((current) => (current ? `${current} ${text}` : text));
+        } catch (error) {
+          setVoiceError(getErrorMessage(error));
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      setVoiceError('No se pudo acceder al micrófono');
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setRecording(false);
+  };
+
+  const toggleRecording = () => {
+    if (recording) stopRecording();
+    else void startRecording();
+  };
+
   return (
-    <section className="chat-panel" aria-label="Chat asistente IGNIS">
+    <section className="chat-panel" aria-label="Chat asistente PYROS">
       <header className="chat-panel__header">
         <span><Bot size={16} /> Chat Asistente</span>
         <small>AI AGENT · NASA FIRMS en tiempo real</small>
@@ -89,6 +137,7 @@ export function ChatPanel({ chat }: { chat: Chat }) {
       </div>
 
       {chat.error && <p className="data-error" role="alert">{chat.error}</p>}
+      {voiceError && <p className="data-error" role="alert">{voiceError}</p>}
 
       <form
         className="chat-panel__composer"
@@ -96,11 +145,20 @@ export function ChatPanel({ chat }: { chat: Chat }) {
       >
         <input
           type="text"
-          placeholder="Pregunta por incendios en un país…"
+          placeholder={recording ? 'Escuchando…' : 'Pregunta por incendios en un país…'}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          disabled={chat.pending}
+          disabled={chat.pending || transcribing}
         />
+        <button
+          type="button"
+          className={`chat-panel__mic ${recording ? 'is-recording' : ''}`}
+          onClick={toggleRecording}
+          disabled={chat.pending || transcribing}
+          aria-label={recording ? 'Detener grabación' : 'Grabar mensaje de voz'}
+        >
+          {transcribing ? <Loader2 size={16} className="chat-panel__spin" /> : recording ? <Square size={16} /> : <Mic size={16} />}
+        </button>
         <button type="submit" disabled={chat.pending || !draft.trim()} aria-label="Enviar mensaje">
           <Send size={16} />
         </button>

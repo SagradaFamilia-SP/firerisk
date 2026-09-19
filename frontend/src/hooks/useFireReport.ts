@@ -28,7 +28,7 @@ function buildReportPdf(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.setTextColor(224, 78, 34);
-  doc.text('IGNIS · Informe operativo de incendio', marginX, y);
+  doc.text('PYROS · Informe operativo de incendio', marginX, y);
   y += 20;
   doc.setDrawColor(220, 220, 220);
   doc.line(marginX, y, pageRight, y);
@@ -127,7 +127,7 @@ function buildReportPdf(
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8.5);
   doc.setTextColor(140, 140, 140);
-  doc.text('IGNIS es una demo de apoyo visual para una hackathon. Los datos de FIRMS son anomalías térmicas', marginX, y);
+  doc.text('PYROS es una demo de apoyo visual para una hackathon. Los datos de FIRMS son anomalías térmicas', marginX, y);
   y += 11;
   doc.text('satelitales; la propagación mostrada es una simulación y no sustituye información oficial ni protocolos', marginX, y);
   y += 11;
@@ -140,7 +140,7 @@ function triggerDownload(blob: Blob, fire: FireDetection) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `ignis-informe-${fire.id}.pdf`;
+  link.download = `pyros-informe-${fire.id}.pdf`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

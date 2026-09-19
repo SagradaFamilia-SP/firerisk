@@ -1,6 +1,6 @@
-# IGNIS — Wildfire Intelligence
+# PYROS — Wildfire Intelligence
 
-Monorepo de la demo operativa de riesgo de incendios de IGNIS. Incluye un backend FastAPI para datos reales de incendios, simulación, meteorología y planes de actuación, y un dashboard React centrado en mapa para explorar el impacto sobre activos críticos.
+Monorepo de la demo operativa de riesgo de incendios de PYROS. Incluye un backend FastAPI para datos reales de incendios, simulación, meteorología y planes de actuación, y un dashboard React centrado en mapa para explorar el impacto sobre activos críticos.
 
 ## Estructura
 
@@ -75,6 +75,10 @@ Variables disponibles:
 - `FIRMS_BASE_URL`: origen oficial de FIRMS; normalmente no es necesario cambiarlo.
 - `FIRMS_DATA_CACHE_TTL_SECONDS`: caché de observaciones por viewport, 300 s por defecto.
 - `FIRMS_WMS_CACHE_TTL_SECONDS`: caché de teselas WMS, 900 s por defecto.
+- `SPEECH_API_KEY`: clave de la API de voz de [SLNG](https://slng.ai) (`/v1/bridges/unmute/stt/{modelo}`). Necesaria para el botón de micrófono del chat. Nunca se envía al navegador.
+- `SPEECH_BASE_URL`: origen de la API de voz. Por defecto `https://api.slng.ai`.
+- `SPEECH_MODEL`: modelo de transcripción (proveedor/modelo). Por defecto `deepgram/nova:3`.
+- `SPEECH_LANGUAGE`: idioma de reconocimiento. Por defecto `es`.
 
 ## Incendios reales
 
@@ -98,4 +102,4 @@ make check   # todas las comprobaciones
 
 El mapa utiliza NASA FIRMS, teselas remotas de Esri y OpenStreetMap. La meteorología real se consulta a Open-Meteo, por lo que estas funciones requieren conexión a Internet.
 
-> IGNIS es una demo de apoyo visual para una hackathon. La propagación mostrada es una simulación y no sustituye información oficial ni protocolos de emergencias.
+> PYROS es una demo de apoyo visual para una hackathon. La propagación mostrada es una simulación y no sustituye información oficial ni protocolos de emergencias.

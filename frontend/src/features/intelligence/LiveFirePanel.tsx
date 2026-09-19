@@ -1,9 +1,11 @@
-import { Gauge, MapPin, Satellite, Thermometer, X } from 'lucide-react';
+import { FileDown, Gauge, Loader2, MapPin, Satellite, Thermometer, X } from 'lucide-react';
 
+import type { AsyncState } from '../../hooks/useDashboard';
+import type { FireReport } from '../../hooks/useFireReport';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
 import { FIRE_RENDER_LIMIT } from '../map/sampleFires';
-import type { FirmsSource } from '../../types/api';
+import type { FirmsSource, ReverseLocationResponse } from '../../types/api';
 
 const sourceLabels: Record<FirmsSource, string> = {
   VIIRS_NOAA20_NRT: 'NOAA-20',
@@ -14,7 +16,10 @@ const utcDate = (value: string) => new Intl.DateTimeFormat('es-ES', {
   dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC',
 }).format(new Date(value));
 
-export function LiveFirePanel({ liveFires, fireSpread }: { liveFires: LiveFires; fireSpread: FireSpread }) {
+export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocation }: {
+  liveFires: LiveFires; fireSpread: FireSpread; fireReport: FireReport;
+  reverseLocation?: AsyncState<ReverseLocationResponse>;
+}) {
   const { hour } = fireSpread;
   const { filters, state, selectedFireId } = liveFires;
   const selected = state.data?.detections.find((fire) => fire.id === selectedFireId);
@@ -68,7 +73,24 @@ export function LiveFirePanel({ liveFires, fireSpread }: { liveFires: LiveFires;
           <button type="button" aria-label="Cerrar detalle del fuego" onClick={() => liveFires.setSelectedFireId(null)}><X size={15} /></button>
         </div>
         <dl className="selected-fire-grid">
-          <div><dt><MapPin size={13} />Ubicación</dt><dd>{selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}</dd></div>
+          <div>
+            <dt><MapPin size={13} />Ubicación</dt>
+            <dd>
+              {reverseLocation?.status === 'loading' && <span className="fire-table__muted">Resolviendo…</span>}
+              {reverseLocation?.status === 'success' && (
+                <>
+                  {reverseLocation.data.place || reverseLocation.data.label}
+                  {reverseLocation.data.country && <small className="selected-fire-grid__sub">{reverseLocation.data.country}</small>}
+                </>
+              )}
+              {(!reverseLocation || reverseLocation.status === 'idle' || reverseLocation.status === 'error') && (
+                <>{selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}</>
+              )}
+            </dd>
+            {reverseLocation?.status === 'success' && (
+              <small className="selected-fire-grid__coords">{selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}</small>
+            )}
+          </div>
           <div><dt><Gauge size={13} />Potencia</dt><dd>FRP {selected.frp?.toFixed(1) ?? '—'} MW</dd></div>
           <div><dt><Thermometer size={13} />Brillo</dt><dd>{selected.brightness.toFixed(1)} K</dd></div>
           <div><dt><Satellite size={13} />Sensor</dt><dd>{selected.satellite} · {selected.instrument}</dd></div>
@@ -79,6 +101,17 @@ export function LiveFirePanel({ liveFires, fireSpread }: { liveFires: LiveFires;
           {selected.scan && selected.track && <span>Scan {selected.scan.toFixed(2)} · Track {selected.track.toFixed(2)}</span>}
         </div>
         <small>Anomalía térmica satelital; no confirma por sí sola un incendio.</small>
+        <button
+          type="button"
+          className="report-download-btn"
+          onClick={fireReport.download}
+          title={fireReport.status === 'ready' ? 'Informe listo' : 'Generando informe en segundo plano…'}
+        >
+          <span className="report-download-btn__icon">
+            {fireReport.status === 'ready' ? <FileDown size={18} /> : <Loader2 size={18} className="spin" />}
+          </span>
+          {fireReport.status === 'ready' ? 'Descargar informe' : 'Generando informe…'}
+        </button>
         {fireSpread.status === 'loading' && <span className="data-hint">Calculando radio de propagación…</span>}
         {fireSpread.status === 'error' && <span className="data-error" role="alert">{fireSpread.error}</span>}
         {fireSpread.data && (() => {

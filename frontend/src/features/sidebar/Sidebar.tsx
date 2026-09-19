@@ -1,5 +1,6 @@
 import { Bot, ChevronsLeft, ChevronsRight, Flame, Info, LogOut, Map, PanelsTopLeft, Settings } from 'lucide-react';
 
+import pyrosLogo from '../../assets/pyros-logo.png';
 import type { LayerKey } from '../../hooks/useDashboard';
 import type { ActiveModule } from '../shell/AppShell';
 import { LayerControls } from './LayerControls';
@@ -12,11 +13,7 @@ export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer, ac
   return (
     <aside className={`sidebar tactical-sidebar ${collapsed ? 'is-collapsed' : ''}`} aria-label="Contexto territorial">
       <div className="sidebar-brand">
-        <span className="brand__mark"><Flame size={20} fill="currentColor" /></span>
-        <span className="brand__copy">
-          <span><strong>IGNIS</strong><b>v2.4</b></span>
-          <small>WILDFIRE INTELLIGENCE</small>
-        </span>
+        <img src={pyrosLogo} alt="PYROS" className="brand__logo" />
         <button
           type="button"
           className="sidebar-toggle"
@@ -35,12 +32,12 @@ export function Sidebar({ layers, collapsed, onCollapseToggle, onToggleLayer, ac
         <button type="button" className={`module-item ${activeModule === 'table' ? 'is-active' : ''}`} aria-current={activeModule === 'table' ? 'page' : undefined} onClick={() => onSelectModule('table')}>
           <span><Flame size={18} /><span className="module-item__text">Tabla de incendios</span></span>{activeModule === 'table' ? <b>ACTIVO</b> : <b className="module-item__alert">LIVE</b>}
         </button>
-        <a className="module-item" href="#simulacion">
-          <span><PanelsTopLeft size={18} /><span className="module-item__text">Simulación de incendios</span></span><small>FARSITE</small>
-        </a>
-        <a className="module-item" href="#chat">
-          <span><Bot size={18} /><span className="module-item__text">Chat Asistente</span></span><small>AI AGENT</small>
-        </a>
+        <button type="button" className={`module-item ${activeModule === 'simulation' ? 'is-active' : ''}`} aria-current={activeModule === 'simulation' ? 'page' : undefined} onClick={() => onSelectModule('simulation')}>
+          <span><PanelsTopLeft size={18} /><span className="module-item__text">Simulación de incendios</span></span>{activeModule === 'simulation' ? <b>ACTIVO</b> : <small>FARSITE</small>}
+        </button>
+        <button type="button" className={`module-item ${activeModule === 'chat' ? 'is-active' : ''}`} aria-current={activeModule === 'chat' ? 'page' : undefined} onClick={() => onSelectModule('chat')}>
+          <span><Bot size={18} /><span className="module-item__text">Chat Asistente</span></span>{activeModule === 'chat' ? <b>ACTIVO</b> : <small>AI AGENT</small>}
+        </button>
         <a className="module-item" href="#about">
           <span><Info size={18} /><span className="module-item__text">About</span></span><small>v2.4.1</small>
         </a>

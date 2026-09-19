@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { apiClient } from '../services/api';
-import type { FireDetection, ReverseLocationResponse } from '../types/api';
+import type { ReverseLocationResponse } from '../types/api';
 import type { AsyncState } from './useDashboard';
 
 const idle: AsyncState<ReverseLocationResponse> = { status: 'idle', data: null, error: null };
 
-export function useReverseLocation(fire: FireDetection | null) {
+export function useReverseLocation(fire: { latitude: number; longitude: number } | null) {
   const [state, setState] = useState<AsyncState<ReverseLocationResponse>>(idle);
 
   useEffect(() => {

@@ -1,4 +1,6 @@
 import type {
+  ChatMessage,
+  ChatResponse,
   FireFilters,
   FireResponse,
   HealthResponse,
@@ -62,6 +64,8 @@ export const apiClient = {
     const params = new URLSearchParams({ lat: String(lat), lon: String(lon) });
     return request<ReverseLocationResponse>(`/location/reverse?${params.toString()}`, { signal });
   },
+  chat: (message: string, history: ChatMessage[], signal?: AbortSignal) =>
+    request<ChatResponse>('/chat', { method: 'POST', body: JSON.stringify({ message, history }), signal }),
 };
 
 export function getErrorMessage(error: unknown): string {

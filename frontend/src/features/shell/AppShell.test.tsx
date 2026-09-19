@@ -70,6 +70,33 @@ const fireSpread = {
   setHour: () => undefined,
 };
 
+const chat = {
+  entries: [],
+  pending: false,
+  error: null,
+  send: () => undefined,
+  reset: () => undefined,
+};
+
+const fireReport = {
+  status: 'idle' as const,
+  error: null,
+  pendingDownload: false,
+  download: () => undefined,
+  dismiss: () => undefined,
+};
+
+const simulation = {
+  point: null,
+  pick: () => undefined,
+  clear: () => undefined,
+  status: 'idle' as const,
+  data: null,
+  error: null,
+  hour: 0,
+  setHour: () => undefined,
+};
+
 describe('AppShell tactical layout', () => {
   it('renders the IGNIS tactical chrome around the live map workspace', () => {
     render(
@@ -77,6 +104,9 @@ describe('AppShell tactical layout', () => {
         dashboard={dashboard as never}
         liveFires={liveFires}
         fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -84,7 +114,7 @@ describe('AppShell tactical layout', () => {
     expect(screen.getByText('Vista sin foco seleccionado')).toBeInTheDocument();
     expect(screen.queryByLabelText('Activo asignado')).not.toBeInTheDocument();
     expect(screen.getByText('MONITORIZACIÓN')).toBeInTheDocument();
-    expect(screen.getByText('IGNIS')).toBeInTheDocument();
+    expect(screen.getByAltText('PYROS')).toBeInTheDocument();
     expect(screen.getByText('Mapa')).toBeInTheDocument();
     expect(screen.getByText('Tabla de incendios')).toBeInTheDocument();
     expect(screen.getByText('Simulación de incendios')).toBeInTheDocument();
@@ -99,6 +129,9 @@ describe('AppShell tactical layout', () => {
         dashboard={dashboard as never}
         liveFires={liveFires}
         fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -110,6 +143,9 @@ describe('AppShell tactical layout', () => {
         dashboard={dashboard as never}
         liveFires={{ ...liveFires, selectedFireId: 'fire-1' }}
         fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -135,6 +171,9 @@ describe('AppShell tactical layout', () => {
           },
           error: null,
         }}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -150,6 +189,9 @@ describe('AppShell tactical layout', () => {
         dashboard={dashboard as never}
         liveFires={{ ...selectedLiveFires, setSelectedFireId }}
         fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -164,6 +206,9 @@ describe('AppShell tactical layout', () => {
         dashboard={dashboard as never}
         liveFires={{ ...liveFires, selectedFireId: 'fire-1' }}
         fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );
@@ -183,6 +228,9 @@ describe('AppShell tactical layout', () => {
         dashboard={dashboard as never}
         liveFires={liveFires}
         fireSpread={fireSpread}
+        chat={chat}
+        fireReport={fireReport}
+        simulation={simulation}
         map={<div aria-label="Mapa táctico">map</div>}
       />,
     );

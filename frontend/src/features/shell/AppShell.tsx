@@ -1,21 +1,28 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+import { ChatPanel } from '../chat/ChatPanel';
 import type { AsyncState, useDashboard } from '../../hooks/useDashboard';
+import type { Chat } from '../../hooks/useChat';
+import type { FireReport } from '../../hooks/useFireReport';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
+import type { SimulationSpread } from '../../hooks/useSimulationSpread';
 import type { ReverseLocationResponse } from '../../types/api';
 import { FireTable } from '../incidents/FireTable';
 import { IntelligencePanel } from '../intelligence/IntelligencePanel';
 import { Sidebar } from '../sidebar/Sidebar';
+import { SimulationWorkspace } from '../simulation/SimulationWorkspace';
+import { ReportDownloadModal } from './ReportDownloadModal';
 import { TopBar } from './TopBar';
 
 type Dashboard = ReturnType<typeof useDashboard>;
-export type ActiveModule = 'map' | 'table';
+export type ActiveModule = 'map' | 'table' | 'chat' | 'simulation';
 
-export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, map }: {
+export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, chat, fireReport, simulation, map }: {
   dashboard: Dashboard; liveFires: LiveFires; fireSpread: FireSpread;
-  reverseLocation?: AsyncState<ReverseLocationResponse>; map: ReactNode;
+  reverseLocation?: AsyncState<ReverseLocationResponse>; chat: Chat; fireReport: FireReport;
+  simulation: SimulationSpread; map: ReactNode;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeModule, setActiveModule] = useState<ActiveModule>('map');
@@ -53,9 +60,20 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, ma
               onSelectFire={(id) => { liveFires.setSelectedFireId(id); setActiveModule('map'); }}
             />
           )}
+          {activeModule === 'chat' && <ChatPanel chat={chat} />}
+          {activeModule === 'simulation' && <SimulationWorkspace simulation={simulation} />}
         </main>
-        {showIntelligencePanel && <IntelligencePanel liveFires={liveFires} fireSpread={fireSpread} onClose={() => liveFires.setSelectedFireId(null)} />}
+        {showIntelligencePanel && (
+          <IntelligencePanel
+            liveFires={liveFires}
+            fireSpread={fireSpread}
+            fireReport={fireReport}
+            reverseLocation={reverseLocation}
+            onClose={() => liveFires.setSelectedFireId(null)}
+          />
+        )}
       </div>
+      <ReportDownloadModal fireReport={fireReport} />
     </div>
   );
 }

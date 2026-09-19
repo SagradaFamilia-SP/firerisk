@@ -53,3 +53,13 @@ export interface ReverseLocationResponse {
   label: string; place: string; municipality: string | null; country: string | null;
   coordinates: string; attribution: string;
 }
+
+export interface ChatMessage { role: 'user' | 'assistant'; content: string }
+
+export interface ChatSummary {
+  region: string | null; hours: 24 | 48 | 72; count: number;
+  confidence_counts: Record<FireConfidence, number>; max_frp: number | null;
+  generated_at: string; narrative_source: 'model' | 'fallback' | 'unconfigured';
+}
+
+export interface ChatResponse { reply: string; fires: FireDetection[]; summary: ChatSummary }

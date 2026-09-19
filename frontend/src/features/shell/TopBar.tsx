@@ -5,8 +5,8 @@ import { StatusPill } from '../../components/StatusPill';
 import type { AsyncState } from '../../hooks/useDashboard';
 import type { HealthResponse } from '../../types/api';
 
-export function TopBar({ health, location, context, selected }: {
-  health: AsyncState<HealthResponse>; location: string; context: string; selected: boolean;
+export function TopBar({ health, location, context, selected, badgeLabel }: {
+  health: AsyncState<HealthResponse>; location: string; context: string; selected: boolean; badgeLabel?: string;
 }) {
   const [time, setTime] = useState(() => new Date());
   useEffect(() => {
@@ -21,7 +21,7 @@ export function TopBar({ health, location, context, selected }: {
         <span className="topbar__live" aria-hidden="true" />
         <strong>{location}</strong>
         <span>· {context}</span>
-        <b>{selected ? 'FOCO SELECCIONADO' : 'MONITORIZACIÓN'}</b>
+        <b>{badgeLabel ?? (selected ? 'FOCO SELECCIONADO' : 'MONITORIZACIÓN')}</b>
       </div>
       <div className="topbar__status">
         <StatusPill tone={online ? 'online' : 'offline'}>{online ? 'API OPERATIVA' : 'API SIN CONEXIÓN'}</StatusPill>

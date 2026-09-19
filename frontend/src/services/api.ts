@@ -8,6 +8,7 @@ import type {
   ReverseLocationResponse,
   SpreadRequest,
   SpreadResponse,
+  TranscriptionResponse,
 } from '../types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -32,6 +33,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       else if (Array.isArray(payload.detail)) message = payload.detail.map((item) => item.msg).join('. ');
     } catch {
       // The stable status-based message remains useful for a non-JSON proxy failure.
+    }
+    throw new ApiError(response.status, message);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function requestForm<T>(path: string, formData: FormData, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: 'POST', body: formData, signal });
+  if (!response.ok) {
+    let message = `Error HTTP ${response.status}`;
+    try {
+      const payload = await response.json() as { detail?: string };
+      if (typeof payload.detail === 'string') message = payload.detail;
+    } catch {
+      // Keep the status-based fallback message.
     }
     throw new ApiError(response.status, message);
   }
@@ -66,6 +82,11 @@ export const apiClient = {
   },
   chat: (message: string, history: ChatMessage[], signal?: AbortSignal) =>
     request<ChatResponse>('/chat', { method: 'POST', body: JSON.stringify({ message, history }), signal }),
+  transcribeAudio: (audio: Blob, signal?: AbortSignal) => {
+    const formData = new FormData();
+    formData.append('file', audio, 'speech.webm');
+    return requestForm<TranscriptionResponse>('/speech-to-text', formData, signal);
+  },
 };
 
 export function getErrorMessage(error: unknown): string {

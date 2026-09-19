@@ -324,6 +324,12 @@
 .chat-panel__composer button { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 10px; color: #fff; background: var(--orange-bright); cursor: pointer; }
 .chat-panel__composer button:disabled { opacity: .4; cursor: default; }
 .chat-panel__composer button:not(:disabled):hover { background: var(--orange); }
+.chat-panel__mic { background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--text-soft); }
+.chat-panel__mic:not(:disabled):hover { background: var(--surface-2); border-color: rgba(249,115,22,.5); color: var(--text); }
+.chat-panel__mic.is-recording { background: rgba(239,68,68,.16); border-color: rgba(239,68,68,.5); color: #f87171; animation: chat-mic-pulse 1.4s ease-in-out infinite; }
+.chat-panel__spin { animation: chat-mic-spin 1s linear infinite; }
+@keyframes chat-mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.35); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); } }
+@keyframes chat-mic-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .simulation-workspace { height: 100%; min-height: 0; display: flex; background: #0b1218; }
 .simulation-workspace .map-workspace { flex: 1; min-width: 0; }

@@ -65,3 +65,5 @@ export interface ChatSummary {
 }
 
 export interface ChatResponse { reply: string; fires: FireDetection[]; summary: ChatSummary }
+
+export interface TranscriptionResponse { text: string }

@@ -1,7 +1,10 @@
 import type {
   AgentPlanRequest,
+  FireFilters,
+  FireResponse,
   HealthResponse,
   OperationalPlan,
+  MapViewport,
   ScenarioInput,
   SimulationResponse,
   WeatherResponse,
@@ -43,10 +46,18 @@ export const apiClient = {
     request<SimulationResponse>('/simulate', { method: 'POST', body: JSON.stringify(input), signal }),
   generatePlan: (input: AgentPlanRequest, signal?: AbortSignal) =>
     request<OperationalPlan>('/agent-plan', { method: 'POST', body: JSON.stringify(input), signal }),
+  fires: (viewport: MapViewport, filters: FireFilters, signal?: AbortSignal) => {
+    const params = new URLSearchParams({
+      west: String(viewport.west), south: String(viewport.south),
+      east: String(viewport.east), north: String(viewport.north),
+      hours: String(filters.hours), sources: filters.sources.join(','),
+      min_confidence: filters.minConfidence,
+    });
+    return request<FireResponse>(`/fires?${params.toString()}`, { signal });
+  },
 };
 
 export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError || error instanceof Error) return error.message;
   return 'Se ha producido un error inesperado';
 }
-

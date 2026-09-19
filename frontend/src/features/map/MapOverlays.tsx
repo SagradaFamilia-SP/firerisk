@@ -1,19 +1,25 @@
-import { Circle, CircleMarker, LayerGroup, Polygon, Polyline, Popup, Rectangle, Tooltip } from 'react-leaflet';
+import { CircleMarker, LayerGroup, Polygon, Polyline, Popup, Rectangle, Tooltip } from 'react-leaflet';
 
 import type { LayerKey } from '../../hooks/useDashboard';
-import type { ScenarioInput, SimulationResponse } from '../../types/api';
-import { destination, FIRE, percentagePolygonToCoordinates } from './geo';
+import type { FireDetection, ScenarioInput, SimulationResponse } from '../../types/api';
+import { destination, percentagePolygonToCoordinates } from './geo';
 
 const perimeter: [number, number][] = [[39.735, -6.292], [39.734, -6.245], [39.708, -6.237], [39.697, -6.275], [39.709, -6.299]];
 
-export function MapOverlays({ scenario, simulation, layers }: {
+export function MapOverlays({ scenario, simulation, layers, fires, selectedFireId, onSelectFire }: {
   scenario: ScenarioInput; simulation: SimulationResponse | null; layers: Record<LayerKey, boolean>;
+  fires: FireDetection[]; selectedFireId: string | null; onSelectFire: (id: string | null) => void;
 }) {
   const spreadPolygon = percentagePolygonToCoordinates(simulation?.propagation_polygon ?? []);
   return (
     <>
-      {layers.risk && <LayerGroup>{[11500, 8500, 5600, 3100].map((radius, index) => <Circle key={radius} center={FIRE} radius={radius} pathOptions={{ color: ['#e9b949', '#f59e3d', '#f36b32', '#ef4444'][index], weight: 1, fillOpacity: 0.025 + index * 0.018 }} />)}</LayerGroup>}
-      {layers.fire && scenario.hotspot_active && <LayerGroup><CircleMarker center={FIRE} radius={12} pathOptions={{ color: '#ff7a45', weight: 3, fillColor: '#ef3f34', fillOpacity: 0.92 }}><Tooltip direction="top">Foco térmico VIIRS · confianza 82%</Tooltip></CircleMarker><Circle center={FIRE} radius={1200} pathOptions={{ color: '#ff6246', dashArray: '8 8', fillOpacity: 0.05 }} /></LayerGroup>}
+      {layers.fire && <LayerGroup>{fires.map((fire) => <CircleMarker
+        key={fire.id}
+        center={[fire.latitude, fire.longitude]}
+        radius={selectedFireId === fire.id ? 10 : Math.max(4, Math.min(9, 3 + Math.sqrt(fire.frp ?? 0) / 2))}
+        pathOptions={{ color: fire.confidence === 'high' ? '#ffe08a' : '#ff8b57', weight: selectedFireId === fire.id ? 3 : 1, fillColor: '#f0442f', fillOpacity: 0.82 }}
+        eventHandlers={{ click: () => onSelectFire(fire.id) }}
+      ><Tooltip direction="top">{fire.satellite} · {fire.confidence} · FRP {fire.frp?.toFixed(1) ?? '—'} MW</Tooltip><Popup><strong>Detección VIIRS real</strong><br />{new Date(fire.acquired_at).toLocaleString('es-ES')}<br />FRP: {fire.frp?.toFixed(1) ?? '—'} MW</Popup></CircleMarker>)}</LayerGroup>}
       {layers.spread && spreadPolygon.length >= 3 && <Polygon positions={spreadPolygon} pathOptions={{ color: '#ff6b3d', weight: 3, dashArray: '10 7', fillColor: '#ff7a32', fillOpacity: 0.24 }}><Tooltip>Propagación estimada · +{scenario.hour} h</Tooltip></Polygon>}
       {layers.wind && <LayerGroup>{Array.from({ length: 48 }, (_, index) => {
         const row = Math.floor(index / 8); const col = index % 8;
@@ -28,4 +34,3 @@ export function MapOverlays({ scenario, simulation, layers }: {
     </>
   );
 }
-

@@ -57,3 +57,29 @@ export interface OperationalPlan {
   message: string; confidence_note: string; model_error: string | null;
 }
 
+export type FirmsSource = 'VIIRS_NOAA20_NRT' | 'VIIRS_NOAA21_NRT';
+export type FireConfidence = 'low' | 'nominal' | 'high';
+
+export interface FireDetection {
+  id: string; latitude: number; longitude: number; acquired_at: string;
+  satellite: string; instrument: string; source: FirmsSource;
+  confidence: FireConfidence; brightness: number; brightness_ti5: number | null;
+  frp: number | null; scan: number | null; track: number | null;
+  daynight: 'day' | 'night';
+}
+
+export interface FireResponse {
+  detections: FireDetection[];
+  meta: {
+    sources: FirmsSource[]; requested_hours: 24 | 48 | 72; fetched_at: string;
+    latest_acquisition: string | null; count: number; stale: boolean; cache: 'hit' | 'miss';
+  };
+}
+
+export interface MapViewport {
+  west: number; south: number; east: number; north: number; zoom: number;
+}
+
+export interface FireFilters {
+  hours: 24 | 48 | 72; sources: FirmsSource[]; minConfidence: FireConfidence;
+}

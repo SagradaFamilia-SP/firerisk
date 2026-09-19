@@ -4,7 +4,7 @@ import type { LayerKey } from '../../hooks/useDashboard';
 
 const layerItems: Array<{ id: LayerKey; label: string; icon: typeof Flame }> = [
   { id: 'risk', label: 'Índice de peligro', icon: Layers3 },
-  { id: 'fire', label: 'Focos térmicos', icon: Flame },
+  { id: 'fire', label: 'NASA FIRMS · VIIRS', icon: Flame },
   { id: 'spread', label: 'Propagación', icon: Route },
   { id: 'wind', label: 'Campo de viento', icon: Wind },
   { id: 'assets', label: 'Infraestructuras', icon: RadioTower },
@@ -25,4 +25,3 @@ export function LayerControls({ layers, onToggle }: { layers: Record<LayerKey, b
     </section>
   );
 }
-

@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     model_base_url: str = "http://localhost:30000/v1"
     model_id: str = "/workspace/models/qwen3.6-35b-a3b"
     frontend_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
+    nasa_firms_map_key: str | None = None
+    firms_base_url: str = "https://firms.modaps.eosdis.nasa.gov"
+    firms_data_cache_ttl_seconds: int = 300
+    firms_wms_cache_ttl_seconds: int = 900
 
     @field_validator("frontend_origins", mode="before")
     @classmethod

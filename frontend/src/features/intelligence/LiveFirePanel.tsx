@@ -1,0 +1,66 @@
+import type { LiveFires } from '../../hooks/useLiveFires';
+import type { FirmsSource } from '../../types/api';
+
+const sourceLabels: Record<FirmsSource, string> = {
+  VIIRS_NOAA20_NRT: 'NOAA-20',
+  VIIRS_NOAA21_NRT: 'NOAA-21',
+};
+
+const utcDate = (value: string) => new Intl.DateTimeFormat('es-ES', {
+  dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC',
+}).format(new Date(value));
+
+export function LiveFirePanel({ liveFires }: { liveFires: LiveFires }) {
+  const { filters, state, selectedFireId } = liveFires;
+  const selected = state.data?.detections.find((fire) => fire.id === selectedFireId);
+  const toggleSource = (source: FirmsSource) => {
+    const hasSource = filters.sources.includes(source);
+    if (hasSource && filters.sources.length === 1) return;
+    liveFires.updateFilters({
+      sources: hasSource ? filters.sources.filter((item) => item !== source) : [...filters.sources, source],
+    });
+  };
+
+  return (
+    <section className="panel-section live-fire-panel">
+      <div className="section-heading">
+        <span className="eyebrow">NASA FIRMS · VIIRS</span>
+        <span className={`live-dot ${state.status === 'error' ? 'is-error' : ''}`}>
+          {state.status === 'loading' ? 'Actualizando' : 'En vivo'}
+        </span>
+      </div>
+      <div className="fire-filters">
+        <select aria-label="Ventana temporal FIRMS" value={filters.hours} onChange={(event) => liveFires.updateFilters({ hours: Number(event.target.value) as 24 | 48 | 72 })}>
+          <option value={24}>Últimas 24 h</option><option value={48}>Últimas 48 h</option><option value={72}>Últimas 72 h</option>
+        </select>
+        <select aria-label="Confianza mínima" value={filters.minConfidence} onChange={(event) => liveFires.updateFilters({ minConfidence: event.target.value as typeof filters.minConfidence })}>
+          <option value="low">Toda confianza</option><option value="nominal">Nominal+</option><option value="high">Alta</option>
+        </select>
+      </div>
+      <div className="source-toggles">
+        {(Object.keys(sourceLabels) as FirmsSource[]).map((source) => <label key={source}><input type="checkbox" checked={filters.sources.includes(source)} onChange={() => toggleSource(source)} /> {sourceLabels[source]}</label>)}
+      </div>
+      {liveFires.viewport && liveFires.viewport.zoom < 5
+        ? <p className="data-hint">Acerca el mapa para consultar cada detección.</p>
+        : <p className="data-hint">{state.data
+          ? state.data.meta.count === 0
+            ? 'Sin detecciones en esta vista.'
+            : `${state.data.meta.count.toLocaleString('es-ES')} detecciones en esta vista`
+          : 'Esperando área visible…'}</p>}
+      {state.data && <p className="data-hint">
+        {state.data.meta.stale ? 'Datos en caché · NASA no disponible. ' : ''}
+        {state.data.meta.latest_acquisition ? `Última adquisición ${utcDate(state.data.meta.latest_acquisition)} UTC · ` : ''}
+        Sincronizado {utcDate(state.data.meta.fetched_at)} UTC
+        {state.data.meta.count > 8000 ? ' · Mapa limitado a las 8.000 observaciones más recientes' : ''}
+      </p>}
+      {state.status === 'error' && <p className="data-error" role="alert">{state.error}</p>}
+      {selected && <div className="fire-detail">
+        <strong>{sourceLabels[selected.source]} · {selected.confidence}</strong>
+        <span>{utcDate(selected.acquired_at)} UTC</span>
+        <span>FRP {selected.frp?.toFixed(1) ?? '—'} MW · Brillo {selected.brightness.toFixed(1)} K · {selected.daynight === 'day' ? 'Día' : 'Noche'}</span>
+        <span>{selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}</span>
+        <small>Anomalía térmica satelital; no confirma por sí sola un incendio.</small>
+      </div>}
+    </section>
+  );
+}

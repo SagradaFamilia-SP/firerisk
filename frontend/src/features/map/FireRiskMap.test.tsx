@@ -2,10 +2,20 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { FireDetection } from '../../types/api';
 import { FireRiskMap } from './FireRiskMap';
+
+const detection = (over: Partial<FireDetection>): FireDetection => ({
+  id: 'fire-1', latitude: 40.0, longitude: -6.0, acquired_at: '2026-09-19T10:00:00Z',
+  satellite: 'N21', instrument: 'VIIRS', source: 'VIIRS_NOAA21_NRT', confidence: 'nominal',
+  brightness: 300, brightness_ti5: null, frp: 3, scan: 0.4, track: 0.5, daynight: 'day',
+  ...over,
+});
 
 const fitBounds = vi.fn();
 const flyToBounds = vi.fn();
+const flyTo = vi.fn();
+const setView = vi.fn();
 
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -22,7 +32,7 @@ vi.mock('react-leaflet', () => ({
   Popup: ({ children }: { children: ReactNode }) => <>{children}</>,
   Rectangle: () => null,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  useMap: () => ({ flyTo: vi.fn(), fitBounds, flyToBounds, invalidateSize: vi.fn(), getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
+  useMap: () => ({ flyTo, setView, fitBounds, flyToBounds, invalidateSize: vi.fn(), getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
   useMapEvents: () => ({ getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
 }));
 
@@ -30,6 +40,8 @@ describe('FireRiskMap', () => {
   beforeEach(() => {
     fitBounds.mockClear();
     flyToBounds.mockClear();
+    flyTo.mockClear();
+    setView.mockClear();
     window.matchMedia = vi.fn().mockReturnValue({ matches: false });
   });
 
@@ -181,5 +193,53 @@ describe('FireRiskMap', () => {
     expect(fitBounds).toHaveBeenCalledTimes(1);
     expect(fitBounds.mock.calls[0][1]).toMatchObject({ animate: false });
     expect(flyToBounds).not.toHaveBeenCalled();
+  });
+
+  it('centers on a clicked fire at a medium zoom, and again when a different fire is picked', () => {
+    vi.useFakeTimers();
+    try {
+      const fireA = detection({ id: 'fire-a', latitude: 40.0, longitude: -6.0 });
+      const fireB = detection({ id: 'fire-b', latitude: 41.5, longitude: -3.2 });
+      const idleFireSpread = { status: 'idle' as const, data: null, error: null, hour: 0, setHour: vi.fn() };
+
+      const { rerender } = render(
+        <FireRiskMap
+          layers={{ fire: true, spread: true }}
+          baseMap="satellite"
+          fires={[fireA, fireB]}
+          selectedFireId="fire-a"
+          onSelectFire={vi.fn()}
+          onViewport={vi.fn()}
+          fireSpread={idleFireSpread}
+        />,
+      );
+
+      // The fly-to is deliberately delayed (to let a simultaneous panel/layout
+      // transition settle before Leaflet measures the container), so it must
+      // not have fired yet on the same tick as the click.
+      expect(flyTo).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(300);
+      expect(flyTo).toHaveBeenCalledTimes(1);
+      expect(flyTo).toHaveBeenCalledWith([40.0, -6.0], 12, expect.objectContaining({ duration: expect.any(Number) }));
+
+      // Dragging to another point and clicking it re-centers on the new fire.
+      rerender(
+        <FireRiskMap
+          layers={{ fire: true, spread: true }}
+          baseMap="satellite"
+          fires={[fireA, fireB]}
+          selectedFireId="fire-b"
+          onSelectFire={vi.fn()}
+          onViewport={vi.fn()}
+          fireSpread={idleFireSpread}
+        />,
+      );
+      vi.advanceTimersByTime(300);
+
+      expect(flyTo).toHaveBeenCalledTimes(2);
+      expect(flyTo).toHaveBeenLastCalledWith([41.5, -3.2], 12, expect.objectContaining({ duration: expect.any(Number) }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

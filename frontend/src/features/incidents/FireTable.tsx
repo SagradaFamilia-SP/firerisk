@@ -22,7 +22,7 @@ type SortKey = 'date' | 'city' | 'country' | 'confidence' | 'frp' | 'brightness'
 type SortDir = 'asc' | 'desc';
 type DayNightFilter = 'all' | 'day' | 'night';
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [30, 50, 100] as const;
 
 /** Parses a filter's numeric input; blank/invalid text means "no bound". */
 function parseBound(value: string): number | null {
@@ -47,6 +47,7 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<typeof PAGE_SIZE_OPTIONS[number]>(30);
 
   const cityOf = useCallback((id: string) => {
     const entry = labels[id];
@@ -130,12 +131,12 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseFiltered, locationNeedle, sortKey, sortDir, needsLabels ? cityOf : null, needsLabels ? countryOf : null]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const clampedPage = Math.min(page, pageCount);
-  const pageRows = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+  const pageRows = filtered.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
 
   useEffect(() => { setPage(1); }, [
-    dayNightFilter, locationQuery, frpMin, frpMax, brightnessMin, brightnessMax, dateFrom, dateTo, filters,
+    dayNightFilter, locationQuery, frpMin, frpMax, brightnessMin, brightnessMax, dateFrom, dateTo, filters, pageSize,
   ]);
 
   useEffect(() => {
@@ -292,6 +293,16 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
             <PageJump page={clampedPage} pageCount={pageCount} onJump={setPage} />
             <button type="button" disabled={clampedPage >= pageCount} onClick={() => setPage((current) => current + 1)} aria-label="Página siguiente"><ChevronRight size={14} /></button>
           </div>
+          <label className="fire-table__page-size">
+            <span>Resultados</span>
+            <select
+              aria-label="Resultados por página"
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value) as typeof PAGE_SIZE_OPTIONS[number])}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
         </footer>
       )}
     </section>

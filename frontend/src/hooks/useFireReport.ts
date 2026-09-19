@@ -166,6 +166,10 @@ export function useFireReport(
   const [pendingDownload, setPendingDownload] = useState(false);
   const fireRef = useRef(fire);
   fireRef.current = fire;
+  const fireSpreadRef = useRef(fireSpread);
+  fireSpreadRef.current = fireSpread;
+  const reverseLocationRef = useRef(reverseLocation);
+  reverseLocationRef.current = reverseLocation;
 
   // A newly selected fire (or none) starts from a clean slate. This must NOT
   // also fire when fireSpread/reverseLocation merely settle for the SAME
@@ -195,7 +199,7 @@ export function useFireReport(
       const currentFire = fireRef.current;
       if (!currentFire) return;
       try {
-        setBlob(buildReportPdf(currentFire, reverseLocation, fireSpread));
+        setBlob(buildReportPdf(currentFire, reverseLocationRef.current, fireSpreadRef.current));
         setStatus('ready');
       } catch {
         setStatus('error');
@@ -203,8 +207,16 @@ export function useFireReport(
       }
     }, 30);
     return () => window.clearTimeout(timer);
+    // Deliberately NOT depending on `fireSpread.hour`: this eager pre-build
+    // only needs to run once, when the simulation/location data first finish
+    // loading for this fire. Depending on `hour` too used to rebuild the PDF
+    // on every timeline tick during playback, making the download button
+    // flicker between "generating" and "ready" several times a second.
+    // `download()` below always rebuilds fresh from the *current* hour at
+    // click time, so the downloaded report still matches whatever the user
+    // was actually looking at, without any background flicker while it plays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fire?.id, fireSpread.status, fireSpread.hour, reverseLocation.status]);
+  }, [fire?.id, fireSpread.status, reverseLocation.status]);
 
   useEffect(() => {
     if (status === 'ready' && pendingDownload && blob && fireRef.current) {
@@ -214,13 +226,22 @@ export function useFireReport(
   }, [status, pendingDownload, blob]);
 
   const download = useCallback(() => {
-    if (!fireRef.current) return;
-    if (status === 'ready' && blob) {
-      triggerDownload(blob, fireRef.current);
+    const currentFire = fireRef.current;
+    if (!currentFire) return;
+    if (fireSpreadRef.current.status === 'loading' || reverseLocationRef.current.status === 'loading') {
+      setPendingDownload(true);
       return;
     }
-    setPendingDownload(true);
-  }, [status, blob]);
+    try {
+      const freshBlob = buildReportPdf(currentFire, reverseLocationRef.current, fireSpreadRef.current);
+      setBlob(freshBlob);
+      setStatus('ready');
+      triggerDownload(freshBlob, currentFire);
+    } catch {
+      setStatus('error');
+      setError('No se pudo generar el informe.');
+    }
+  }, []);
 
   const dismiss = useCallback(() => setPendingDownload(false), []);
 

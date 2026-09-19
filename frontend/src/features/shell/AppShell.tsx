@@ -96,6 +96,7 @@ export function AppShell({ dashboard, liveFires, fireSpread, reverseLocation, si
           {activeModule === 'table' && (
             <FireTable
               liveFires={liveFires}
+              cameraFires={cameraFires.fires}
               onSelectFire={(id) => { liveFires.setSelectedFireId(id); setActiveModule('map'); }}
             />
           )}

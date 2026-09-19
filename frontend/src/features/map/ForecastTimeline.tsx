@@ -10,7 +10,13 @@ export function ForecastTimeline({ hour, onChange, onPlayingChange }: {
   }, [onPlayingChange, playing]);
   useEffect(() => {
     if (!playing) return;
-    const timer = window.setInterval(() => onChange(hour >= 12 ? 0 : hour + 1), 450);
+    if (hour >= 12) {
+      // Clean stop at the end of the horizon — no looping back to "Ahora"
+      // and re-running the playback again.
+      setPlaying(false);
+      return;
+    }
+    const timer = window.setInterval(() => onChange(hour + 1), 450);
     return () => window.clearInterval(timer);
   }, [hour, onChange, playing]);
   return (

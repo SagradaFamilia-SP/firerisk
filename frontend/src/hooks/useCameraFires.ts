@@ -52,13 +52,6 @@ export function useCameraFires() {
         if (latestControllerRef.current !== controller) return; // superseded by a newer refresh
         setState({ status: 'success', data, error: null });
         const unseen = data.find((fire) => !seenIdsRef.current.has(fire.id));
-        // TEMPORARY diagnostic trace — remove once the "no veo la notificación"
-        // report is confirmed fixed. Open DevTools console to see this.
-        console.log('[camera-notice] refresh resolved', {
-          ids: data.map((fire) => fire.id),
-          seenIds: [...seenIdsRef.current],
-          unseenId: unseen?.id ?? null,
-        });
         if (unseen) setNotification(unseen);
       },
       (error: unknown) => {
@@ -87,8 +80,6 @@ export function useCameraFires() {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       const type = (event.data as { type?: string } | null)?.type;
-      // TEMPORARY diagnostic trace — remove once confirmed fixed.
-      if (type?.startsWith('camera-fire')) console.log('[camera-notice] message received', type);
       if (type === 'camera-fire-detected' || type === 'camera-fire-recording-saved') refresh();
     };
     window.addEventListener('message', onMessage);

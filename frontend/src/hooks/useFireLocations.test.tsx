@@ -29,7 +29,7 @@ describe('useFireLocations', () => {
     act(() => result.current.resolve('fire-1', 39.9337, -6.356));
     expect(result.current.labels['fire-1']).toEqual({ status: 'loading' });
 
-    await act(() => vi.advanceTimersByTimeAsync(200));
+    await act(() => vi.advanceTimersByTimeAsync(1_050));
 
     expect(apiClient.reverseLocation).toHaveBeenCalledWith(39.9337, -6.356);
     expect(result.current.labels['fire-1']).toEqual({ status: 'success', data: location });
@@ -41,7 +41,7 @@ describe('useFireLocations', () => {
 
     act(() => result.current.resolve('fire-1', 39.9337, -6.356));
     act(() => result.current.resolve('fire-1', 39.9337, -6.356));
-    await act(() => vi.advanceTimersByTimeAsync(200));
+    await act(() => vi.advanceTimersByTimeAsync(1_050));
 
     expect(apiClient.reverseLocation).toHaveBeenCalledTimes(1);
   });
@@ -55,10 +55,10 @@ describe('useFireLocations', () => {
       result.current.resolve('fire-2', 40.0, -6.0);
     });
 
-    await act(() => vi.advanceTimersByTimeAsync(150));
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
     expect(apiClient.reverseLocation).toHaveBeenCalledTimes(1);
 
-    await act(() => vi.advanceTimersByTimeAsync(150));
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
     expect(apiClient.reverseLocation).toHaveBeenCalledTimes(2);
   });
 
@@ -67,7 +67,7 @@ describe('useFireLocations', () => {
     const { result } = renderHook(() => useFireLocations());
 
     act(() => result.current.resolve('fire-1', 39.9337, -6.356));
-    await act(() => vi.advanceTimersByTimeAsync(200));
+    await act(() => vi.advanceTimersByTimeAsync(1_050));
 
     expect(result.current.labels['fire-1']).toEqual({ status: 'error' });
   });

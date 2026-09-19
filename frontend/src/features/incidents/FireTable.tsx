@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useFireLocations } from '../../hooks/useFireLocations';
 import type { LiveFires } from '../../hooks/useLiveFires';
-import type { FireConfidence, FireDetection, FirmsSource } from '../../types/api';
+import { cameraFireToDetection } from '../map/cameraFireToDetection';
+import type { CameraFireDetection, FireConfidence, FireDetection, FirmsSource } from '../../types/api';
 import { INTENSITY_LABELS, intensityBucket } from './intensity';
 
 const NASA_SOURCES: readonly FirmsSource[] = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT'];
@@ -34,7 +35,9 @@ function parseBound(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; onSelectFire: (id: string) => void }) {
+export function FireTable({ liveFires, cameraFires, onSelectFire }: {
+  liveFires: LiveFires; cameraFires: CameraFireDetection[]; onSelectFire: (id: string) => void;
+}) {
   const { state, filters, updateFilters, selectedFireId } = liveFires;
   const { labels, resolve } = useFireLocations();
 
@@ -51,6 +54,9 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<typeof PAGE_SIZE_OPTIONS[number]>(30);
+  // Camera detections aren't part of the NASA viewport fetch `filters.sources`
+  // gates, so showing/hiding them needs its own toggle, kept local to the table.
+  const [showCameraFires, setShowCameraFires] = useState(true);
 
   const cityOf = useCallback((id: string) => {
     const entry = labels[id];
@@ -76,9 +82,13 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
   const fromBound = dateFrom ? new Date(dateFrom).getTime() : null;
   const toBound = dateTo ? new Date(dateTo).getTime() : null;
 
+  const allDetections = useMemo(
+    () => [...(state.data?.detections ?? []), ...(showCameraFires ? cameraFires.map(cameraFireToDetection) : [])],
+    [state.data, cameraFires, showCameraFires],
+  );
+
   const baseFiltered = useMemo(() => {
-    const detections = state.data?.detections ?? [];
-    return detections.filter((fire) => {
+    return allDetections.filter((fire) => {
       if (dayNightFilter !== 'all' && fire.daynight !== dayNightFilter) return false;
       if (frpMinBound !== null && (fire.frp ?? -Infinity) < frpMinBound) return false;
       if (frpMaxBound !== null && (fire.frp ?? Infinity) > frpMaxBound) return false;
@@ -91,7 +101,7 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
       }
       return true;
     });
-  }, [state.data, dayNightFilter, frpMinBound, frpMaxBound, brightnessMinBound, brightnessMaxBound, fromBound, toBound]);
+  }, [allDetections, dayNightFilter, frpMinBound, frpMaxBound, brightnessMinBound, brightnessMaxBound, fromBound, toBound]);
 
   // The search box matches a city/municipality OR a country label — one field
   // covers "where", rather than making people pick which kind of place name
@@ -140,6 +150,7 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
 
   useEffect(() => { setPage(1); }, [
     dayNightFilter, locationQuery, frpMin, frpMax, brightnessMin, brightnessMax, dateFrom, dateTo, filters, pageSize,
+    showCameraFires,
   ]);
 
   useEffect(() => {
@@ -173,11 +184,15 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
 
   const toggleSource = (source: FirmsSource) => {
     const hasSource = filters.sources.includes(source);
-    if (hasSource && filters.sources.length === 1) return;
     updateFilters({ sources: hasSource ? filters.sources.filter((item) => item !== source) : [...filters.sources, source] });
   };
 
-  const totalCount = state.data?.detections.length ?? 0;
+  const totalCount = allDetections.length;
+  // Camera detections aren't gated by the map viewport/zoom the way NASA's
+  // are, so the table has data to show (and should render it) even while
+  // `state.data` is still null — e.g. zoomed out below the NASA fetch's
+  // minimum zoom, or before the first viewport fetch has resolved.
+  const hasAnyData = state.data !== null || (showCameraFires && cameraFires.length > 0);
   const advancedFilterCount = [frpMin, frpMax, brightnessMin, brightnessMax, dateFrom, dateTo]
     .filter((value) => value.trim() !== '').length;
   const hasLocalFilters = locationQuery.trim() !== '' || dayNightFilter !== 'all' || advancedFilterCount > 0;
@@ -246,6 +261,7 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
             {NASA_SOURCES.map((source) => (
               <label key={source}><input type="checkbox" checked={filters.sources.includes(source)} onChange={() => toggleSource(source)} /> {sourceLabels[source]}</label>
             ))}
+            <label><input type="checkbox" checked={showCameraFires} onChange={() => setShowCameraFires((current) => !current)} /> {sourceLabels.CAMERA}</label>
           </div>
           <span className="data-hint">
             {state.status === 'loading' ? 'Actualizando…' : `Mostrando ${filtered.length.toLocaleString('es-ES')} de ${totalCount.toLocaleString('es-ES')} detecciones en la vista actual del mapa`}
@@ -255,15 +271,15 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
 
       {state.status === 'error' && <p className="data-error" role="alert">{state.error}</p>}
 
-      {!state.data && state.status !== 'error' && (
+      {!hasAnyData && state.status !== 'error' && (
         <p className="fire-table__empty">{state.status === 'loading' ? 'Cargando detecciones…' : 'Mueve o acerca el mapa para cargar detecciones.'}</p>
       )}
 
-      {state.data && filtered.length === 0 && (
+      {hasAnyData && filtered.length === 0 && (
         <p className="fire-table__empty">Ningún incendio coincide con los filtros actuales.</p>
       )}
 
-      {state.data && filtered.length > 0 && (
+      {hasAnyData && filtered.length > 0 && (
         <div className="fire-table__scroll">
           <table>
             <thead>
@@ -271,7 +287,7 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
                 <th><button type="button" onClick={() => toggleSort('date')}>Fecha/Hora UTC {sortIcon('date')}</button></th>
                 <th><button type="button" onClick={() => toggleSort('city')}>Ciudad / Municipio {sortIcon('city')}</button></th>
                 <th><button type="button" onClick={() => toggleSort('country')}>País {sortIcon('country')}</button></th>
-                <th>Satélite</th>
+                <th>Fuente</th>
                 <th><button type="button" onClick={() => toggleSort('confidence')}>Confianza {sortIcon('confidence')}</button></th>
                 <th><button type="button" onClick={() => toggleSort('frp')}>Intensidad (FRP) {sortIcon('frp')}</button></th>
                 <th><button type="button" onClick={() => toggleSort('brightness')}>Brillo {sortIcon('brightness')}</button></th>
@@ -288,7 +304,7 @@ export function FireTable({ liveFires, onSelectFire }: { liveFires: LiveFires; o
         </div>
       )}
 
-      {state.data && filtered.length > 0 && (
+      {hasAnyData && filtered.length > 0 && (
         <footer className="fire-table__pagination">
           <span>Página {clampedPage} de {pageCount}</span>
           <div>
@@ -335,7 +351,7 @@ function FireRow({ fire, location, selected, onSelectFire }: {
         {location?.status === 'success' && !countryText && <span className="fire-table__muted">—</span>}
         {!location && <span className="fire-table__muted">—</span>}
       </td>
-      <td>{sourceLabels[fire.source]} · {fire.instrument}</td>
+      <td>{fire.source === 'CAMERA' ? 'Cámara Vonage' : `${sourceLabels[fire.source]} · ${fire.instrument}`}</td>
       <td><span className={`confidence-badge confidence-badge--${fire.confidence}`}>{confidenceLabels[fire.confidence]}</span></td>
       <td>
         {fire.frp !== null

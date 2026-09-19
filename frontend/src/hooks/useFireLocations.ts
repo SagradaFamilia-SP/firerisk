@@ -9,7 +9,7 @@ export type FireLocationState =
   | { status: 'success'; data: ReverseLocationResponse }
   | { status: 'error' };
 
-const RESOLVE_DELAY_MS = 150;
+const RESOLVE_DELAY_MS = 1_000;
 
 /**
  * Lazily reverse-geocodes fire detections one at a time (city/municipio labels

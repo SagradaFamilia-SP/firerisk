@@ -333,8 +333,8 @@
 .fire-table__scroll { flex: 1; min-height: 0; overflow: auto; }
 .fire-table__scroll table { width: 100%; border-collapse: collapse; font-size: 11px; }
 .fire-table__scroll thead { position: sticky; top: 0; z-index: 1; background: #0d151c; }
-.fire-table__scroll th { padding: 0; border-bottom: 1px solid var(--line-strong); text-align: left; }
-.fire-table__scroll th button { width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 10px 14px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; text-align: left; white-space: nowrap; cursor: pointer; }
+.fire-table__scroll th { padding: 10px 14px; border-bottom: 1px solid var(--line-strong); color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; text-align: left; white-space: nowrap; }
+.fire-table__scroll th button { width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .fire-table__scroll th button:hover { color: var(--text); }
 .fire-table__scroll th[aria-label] { width: 1%; }
 .fire-table__scroll td { padding: 9px 14px; border-bottom: 1px solid var(--line); color: var(--text-soft); white-space: nowrap; vertical-align: middle; }

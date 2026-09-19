@@ -105,6 +105,20 @@ describe('useLiveFires', () => {
     expect(result.current.state.data?.detections).toEqual([]);
   });
 
+  it('shows zero NASA detections without fetching when every source is deselected', async () => {
+    const { result } = renderHook(() => useLiveFires());
+    act(() => result.current.updateViewport({ west: -7, south: 39, east: -5, north: 41, zoom: 6 }));
+    await act(() => vi.advanceTimersByTimeAsync(400));
+    expect(apiClient.fires).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.updateFilters({ sources: [] }));
+    await act(() => vi.advanceTimersByTimeAsync(400));
+
+    expect(apiClient.fires).toHaveBeenCalledTimes(1); // no new request for an empty source list
+    expect(result.current.state.status).toBe('success');
+    expect(result.current.state.data?.detections).toEqual([]);
+  });
+
   it('clears the selected fire when panning outside its viewport', async () => {
     const americanFire = detection('america-fire', 38.9355, -112.8171);
     vi.mocked(apiClient.fires).mockResolvedValueOnce({ ...response, detections: [americanFire] });

@@ -43,7 +43,24 @@ export function useLiveFires() {
   stateRef.current = state;
 
   useEffect(() => {
-    if (!viewport || viewport.zoom < MIN_FIRE_FETCH_ZOOM || filters.sources.length === 0) return;
+    if (!viewport || viewport.zoom < MIN_FIRE_FETCH_ZOOM) return;
+    if (filters.sources.length === 0) {
+      // No NASA source selected — show zero NASA detections instead of
+      // leaving whatever was fetched before every source got deselected,
+      // so "camera only" is a real, independent state, not a stale mix.
+      setState({
+        status: 'success',
+        data: {
+          detections: [],
+          meta: {
+            sources: [], requested_hours: filters.hours, fetched_at: new Date().toISOString(),
+            latest_acquisition: null, count: 0, stale: false, cache: 'hit',
+          },
+        },
+        error: null,
+      });
+      return;
+    }
     const requestKey = JSON.stringify({
       west: viewport.west.toFixed(4), south: viewport.south.toFixed(4),
       east: viewport.east.toFixed(4), north: viewport.north.toFixed(4),

@@ -1,1 +1,2 @@
 # firerisk
+Config github acc

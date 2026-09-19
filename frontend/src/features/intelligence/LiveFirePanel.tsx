@@ -1,3 +1,4 @@
+import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
 import type { FirmsSource } from '../../types/api';
 
@@ -10,7 +11,8 @@ const utcDate = (value: string) => new Intl.DateTimeFormat('es-ES', {
   dateStyle: 'short', timeStyle: 'medium', timeZone: 'UTC',
 }).format(new Date(value));
 
-export function LiveFirePanel({ liveFires }: { liveFires: LiveFires }) {
+export function LiveFirePanel({ liveFires, fireSpread }: { liveFires: LiveFires; fireSpread: FireSpread }) {
+  const { hour } = fireSpread;
   const { filters, state, selectedFireId } = liveFires;
   const selected = state.data?.detections.find((fire) => fire.id === selectedFireId);
   const toggleSource = (source: FirmsSource) => {
@@ -60,6 +62,19 @@ export function LiveFirePanel({ liveFires }: { liveFires: LiveFires }) {
         <span>FRP {selected.frp?.toFixed(1) ?? '—'} MW · Brillo {selected.brightness.toFixed(1)} K · {selected.daynight === 'day' ? 'Día' : 'Noche'}</span>
         <span>{selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}</span>
         <small>Anomalía térmica satelital; no confirma por sí sola un incendio.</small>
+        {fireSpread.status === 'loading' && <span className="data-hint">Calculando radio de propagación…</span>}
+        {fireSpread.status === 'error' && <span className="data-error" role="alert">{fireSpread.error}</span>}
+        {fireSpread.data && (() => {
+          const snapshot = fireSpread.data.snapshots[Math.min(hour, fireSpread.data.max_hours)];
+          return (
+            <div className="fire-detail">
+              <strong>Radio estimado {hour === 0 ? 'ahora' : `a +${hour} h`}</strong>
+              <span>Mín {snapshot.radius_km_min.toFixed(2)} km · Medio {snapshot.radius_km_mean.toFixed(2)} km · Máx {snapshot.radius_km_max.toFixed(2)} km</span>
+              <span>Área aproximada: {snapshot.area_km2.toFixed(2)} km²</span>
+              <small>{fireSpread.data.warning}</small>
+            </div>
+          );
+        })()}
       </div>}
     </section>
   );

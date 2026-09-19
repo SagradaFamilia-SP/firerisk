@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
 import type { FireResponse } from '../../types/api';
 import { LiveFirePanel } from './LiveFirePanel';
+
+const idleFireSpread: FireSpread = { status: 'idle', data: null, error: null, hour: 3, setHour: vi.fn() };
 
 const detection = {
   id: 'real-fire', latitude: 39.681, longitude: -6.347,
@@ -31,7 +34,7 @@ const meta = {
 
 describe('LiveFirePanel', () => {
   it('shows real satellite detail, stale state and anomaly disclaimer', () => {
-    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id)} />);
+    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id)} fireSpread={idleFireSpread} />);
     expect(screen.getByText(/18.7 MW/)).toBeInTheDocument();
     expect(screen.getByText(/341.2 K/)).toBeInTheDocument();
     expect(screen.getByText(/Noche/)).toBeInTheDocument();
@@ -40,7 +43,7 @@ describe('LiveFirePanel', () => {
   });
 
   it('states an empty fresh viewport without inventing a fire', () => {
-    render(<LiveFirePanel liveFires={liveFires({ detections: [], meta: { ...meta, sources: [...meta.sources], count: 0, stale: false, latest_acquisition: null } })} />);
+    render(<LiveFirePanel liveFires={liveFires({ detections: [], meta: { ...meta, sources: [...meta.sources], count: 0, stale: false, latest_acquisition: null } })} fireSpread={idleFireSpread} />);
     expect(screen.getByText('Sin detecciones en esta vista.')).toBeInTheDocument();
     expect(screen.queryByText(/Detección VIIRS real/)).not.toBeInTheDocument();
   });

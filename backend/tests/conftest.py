@@ -12,17 +12,3 @@ def client() -> TestClient:
         model_api.get("/models").mock(return_value=Response(200, json={"data": []}))
         with TestClient(app) as test_client:
             yield test_client
-
-
-@pytest.fixture
-def valid_scenario() -> dict[str, object]:
-    return {
-        "hour": 3,
-        "wind_speed": 41,
-        "wind_direction": 68,
-        "temperature": 39,
-        "humidity": 14,
-        "hotspot_active": True,
-        "hotspot_x": 25,
-        "hotspot_y": 58,
-    }

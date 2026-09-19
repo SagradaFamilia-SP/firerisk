@@ -1,15 +1,13 @@
-import { CloudSun, Crosshair, Flame, Globe2, LoaderCircle, Map, Satellite } from 'lucide-react';
+import { Crosshair, Globe2, Map, Satellite } from 'lucide-react';
 
-export function MapToolbar({ baseMap, weatherLoading, onBaseMap, onCritical, onWeather, onCenter, onGlobal }: {
-  baseMap: 'satellite' | 'street'; weatherLoading: boolean;
-  onBaseMap: (mode: 'satellite' | 'street') => void; onCritical: () => void; onWeather: () => void; onCenter: () => void; onGlobal: () => void;
+export function MapToolbar({ baseMap, onBaseMap, onCenter, onGlobal }: {
+  baseMap: 'satellite' | 'street';
+  onBaseMap: (mode: 'satellite' | 'street') => void; onCenter: () => void; onGlobal: () => void;
 }) {
   return (
     <div className="map-toolbar">
       <div className="map-toolbar__group">
-        <button type="button" className="map-action map-action--critical" onClick={onCritical}><Flame size={15} /> Escenario crítico</button>
-        <button type="button" className="map-action" disabled={weatherLoading} onClick={onWeather}>{weatherLoading ? <LoaderCircle className="spin" size={15} /> : <CloudSun size={15} />} Meteorología real</button>
-        <button type="button" className="map-action map-action--icon" aria-label="Centrar instalación" onClick={onCenter}><Crosshair size={16} /></button>
+        <button type="button" className="map-action map-action--icon" aria-label="Centrar mapa" onClick={onCenter}><Crosshair size={16} /></button>
         <button type="button" className="map-action map-action--icon" aria-label="Vista global de incendios" onClick={onGlobal}><Globe2 size={16} /></button>
       </div>
       <div className="map-toolbar__group map-switch">

@@ -1,13 +1,10 @@
 import type {
-  AgentPlanRequest,
   FireFilters,
   FireResponse,
   HealthResponse,
-  OperationalPlan,
   MapViewport,
-  ScenarioInput,
-  SimulationResponse,
-  WeatherResponse,
+  SpreadRequest,
+  SpreadResponse,
 } from '../types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -40,12 +37,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const apiClient = {
   health: (signal?: AbortSignal) => request<HealthResponse>('/health', { signal }),
-  weather: (lat: number, lon: number, signal?: AbortSignal) =>
-    request<WeatherResponse>(`/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, { signal }),
-  simulate: (input: ScenarioInput, signal?: AbortSignal) =>
-    request<SimulationResponse>('/simulate', { method: 'POST', body: JSON.stringify(input), signal }),
-  generatePlan: (input: AgentPlanRequest, signal?: AbortSignal) =>
-    request<OperationalPlan>('/agent-plan', { method: 'POST', body: JSON.stringify(input), signal }),
   fires: (viewport: MapViewport, filters: FireFilters, signal?: AbortSignal) => {
     const params = new URLSearchParams({
       west: String(viewport.west), south: String(viewport.south),
@@ -55,6 +46,8 @@ export const apiClient = {
     });
     return request<FireResponse>(`/fires?${params.toString()}`, { signal });
   },
+  spread: (input: SpreadRequest, signal?: AbortSignal) =>
+    request<SpreadResponse>('/spread', { method: 'POST', body: JSON.stringify(input), signal }),
 };
 
 export function getErrorMessage(error: unknown): string {

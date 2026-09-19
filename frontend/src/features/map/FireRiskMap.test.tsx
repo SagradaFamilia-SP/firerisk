@@ -27,15 +27,13 @@ describe('FireRiskMap', () => {
   it('contains tile failure without hiding map controls', () => {
     render(
       <FireRiskMap
-        scenario={{ hour: 3, wind_speed: 41, wind_direction: 68, temperature: 39, humidity: 14, hotspot_active: true, hotspot_x: 25, hotspot_y: 58 }}
-        simulation={null}
-        layers={{ risk: true, fire: true, spread: true, wind: true, assets: true }}
+        layers={{ fire: true, spread: true }}
         baseMap="satellite"
-        selectedAssetId={null}
         fires={[]}
         selectedFireId={null}
         onSelectFire={vi.fn()}
         onViewport={vi.fn()}
+        fireSpread={{ status: 'idle', data: null, error: null, hour: 0, setHour: vi.fn() }}
       />,
     );
     expect(screen.getByLabelText('Mapa de riesgo de incendio')).toBeInTheDocument();

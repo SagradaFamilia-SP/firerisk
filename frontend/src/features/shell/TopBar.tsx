@@ -1,4 +1,4 @@
-import { Flame, Radio } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { StatusPill } from '../../components/StatusPill';
@@ -19,7 +19,6 @@ export function TopBar({ health }: { health: AsyncState<HealthResponse> }) {
         <span className="brand__mark"><Flame size={20} fill="currentColor" /></span>
         <span><strong>IGNIS</strong><small>Wildfire intelligence</small></span>
       </div>
-      <div className="topbar__site"><Radio size={14} /><span>Talaván Norte</span><small>Cáceres · ES</small></div>
       <div className="topbar__status">
         <StatusPill tone={online ? 'online' : 'offline'}>{online ? 'API operativa' : 'API sin conexión'}</StatusPill>
         <StatusPill tone={modelOnline ? 'online' : 'neutral'}>{modelOnline ? 'Agente conectado' : 'Fallback preparado'}</StatusPill>

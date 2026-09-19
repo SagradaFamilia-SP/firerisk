@@ -2,19 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { MapContainer, TileLayer, useMap, useMapEvents, WMSTileLayer } from 'react-leaflet';
 
 import type { LayerKey } from '../../hooks/useDashboard';
-import type { FireDetection, MapViewport, ScenarioInput, SimulationResponse } from '../../types/api';
+import type { FireSpread } from '../../hooks/useFireSpread';
+import type { FireDetection, MapViewport } from '../../types/api';
 import { SITE } from './geo';
 import { MapOverlays } from './MapOverlays';
 
-function MapController({ selectedAssetId, simulation }: { selectedAssetId: string | null; simulation: SimulationResponse | null }) {
+function MapController() {
   const map = useMap();
   useEffect(() => {
     window.setTimeout(() => map.invalidateSize(), 50);
   }, [map]);
-  useEffect(() => {
-    const asset = simulation?.assets.find((item) => item.id === selectedAssetId);
-    if (asset) map.flyTo([asset.lat, asset.lng], 14, { duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.7 });
-  }, [map, selectedAssetId, simulation]);
   return null;
 }
 
@@ -31,11 +28,12 @@ function ViewportObserver({ onViewport }: { onViewport: (viewport: MapViewport) 
   return null;
 }
 
-export function FireRiskMap({ scenario, simulation, layers, baseMap, selectedAssetId, initialView = 'site', fires, selectedFireId, onSelectFire, onViewport }: {
-  scenario: ScenarioInput; simulation: SimulationResponse | null; layers: Record<LayerKey, boolean>;
-  baseMap: 'satellite' | 'street'; selectedAssetId: string | null; initialView?: 'site' | 'global';
+export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, selectedFireId, onSelectFire, onViewport, fireSpread }: {
+  layers: Record<LayerKey, boolean>;
+  baseMap: 'satellite' | 'street'; initialView?: 'site' | 'global';
   fires: FireDetection[]; selectedFireId: string | null;
   onSelectFire: (id: string | null) => void; onViewport: (viewport: MapViewport) => void;
+  fireSpread: FireSpread;
 }) {
   const [tileFailed, setTileFailed] = useState(false);
   const tile = baseMap === 'satellite'
@@ -53,8 +51,8 @@ export function FireRiskMap({ scenario, simulation, layers, baseMap, selectedAss
           version="1.1.1"
           attribution="NASA FIRMS"
         />}
-        <MapOverlays scenario={scenario} simulation={simulation} layers={layers} fires={fires} selectedFireId={selectedFireId} onSelectFire={onSelectFire} />
-        <MapController selectedAssetId={selectedAssetId} simulation={simulation} />
+        <MapOverlays layers={layers} fires={fires} selectedFireId={selectedFireId} onSelectFire={onSelectFire} fireSpread={fireSpread} />
+        <MapController />
         <ViewportObserver onViewport={onViewport} />
       </MapContainer>
       {tileFailed && <div className="map-warning" role="status">El mapa base no está disponible</div>}

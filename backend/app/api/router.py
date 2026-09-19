@@ -1,10 +1,9 @@
 from fastapi import APIRouter
 
-from app.api.routes import fires, health, plans, simulation, weather
+from app.api.routes import fires, health, spread, weather
 
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(fires.router)
 api_router.include_router(weather.router)
-api_router.include_router(simulation.router)
-api_router.include_router(plans.router)
+api_router.include_router(spread.router)

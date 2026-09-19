@@ -1,8 +1,13 @@
 import { Pause, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-export function ForecastTimeline({ hour, onChange }: { hour: number; onChange: (hour: number) => void }) {
+export function ForecastTimeline({ hour, onChange, onPlayingChange }: {
+  hour: number; onChange: (hour: number) => void; onPlayingChange?: (playing: boolean) => void;
+}) {
   const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    onPlayingChange?.(playing);
+  }, [onPlayingChange, playing]);
   useEffect(() => {
     if (!playing) return;
     const timer = window.setInterval(() => onChange(hour >= 12 ? 0 : hour + 1), 1_000);
@@ -15,4 +20,3 @@ export function ForecastTimeline({ hour, onChange }: { hour: number; onChange: (
     </div>
   );
 }
-

@@ -44,3 +44,8 @@ export interface SpreadResponse {
   snapshots: SpreadSnapshot[];
   warning: string;
 }
+
+export interface ReverseLocationResponse {
+  label: string; place: string; municipality: string | null; country: string | null;
+  coordinates: string; attribution: string;
+}

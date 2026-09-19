@@ -4,6 +4,12 @@ import type { LayerKey } from '../../hooks/useDashboard';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { FireDetection } from '../../types/api';
 
+const fireRadius = (fire: FireDetection, selected: boolean) => {
+  if (selected) return 9;
+  const frp = fire.frp ?? 0;
+  return Math.max(3.5, Math.min(7.5, 3.5 + Math.log10(frp + 1) * 2.3));
+};
+
 export function MapOverlays({ layers, fires, selectedFireId, onSelectFire, fireSpread }: {
   layers: Record<LayerKey, boolean>;
   fires: FireDetection[]; selectedFireId: string | null; onSelectFire: (id: string | null) => void;
@@ -19,7 +25,7 @@ export function MapOverlays({ layers, fires, selectedFireId, onSelectFire, fireS
       {layers.fire && <LayerGroup>{fires.map((fire) => <CircleMarker
         key={fire.id}
         center={[fire.latitude, fire.longitude]}
-        radius={selectedFireId === fire.id ? 10 : Math.max(4, Math.min(9, 3 + Math.sqrt(fire.frp ?? 0) / 2))}
+        radius={fireRadius(fire, selectedFireId === fire.id)}
         pathOptions={{ color: fire.confidence === 'high' ? '#ffe08a' : '#ff8b57', weight: selectedFireId === fire.id ? 3 : 1, fillColor: '#f0442f', fillOpacity: 0.82 }}
         eventHandlers={{ click: () => onSelectFire(fire.id) }}
       ><Tooltip direction="top">{fire.satellite} · {fire.confidence} · FRP {fire.frp?.toFixed(1) ?? '—'} MW</Tooltip><Popup><strong>Detección VIIRS real</strong><br />{new Date(fire.acquired_at).toLocaleString('es-ES')}<br />FRP: {fire.frp?.toFixed(1) ?? '—'} MW</Popup></CircleMarker>)}</LayerGroup>}

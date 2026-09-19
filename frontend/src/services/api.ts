@@ -3,6 +3,7 @@ import type {
   FireResponse,
   HealthResponse,
   MapViewport,
+  ReverseLocationResponse,
   SpreadRequest,
   SpreadResponse,
 } from '../types/api';
@@ -48,6 +49,10 @@ export const apiClient = {
   },
   spread: (input: SpreadRequest, signal?: AbortSignal) =>
     request<SpreadResponse>('/spread', { method: 'POST', body: JSON.stringify(input), signal }),
+  reverseLocation: (lat: number, lon: number, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ lat: String(lat), lon: String(lon) });
+    return request<ReverseLocationResponse>(`/location/reverse?${params.toString()}`, { signal });
+  },
 };
 
 export function getErrorMessage(error: unknown): string {

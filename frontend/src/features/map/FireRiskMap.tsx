@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents, WMSTileLayer } from 'react-leaflet';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { latLngBounds } from 'leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents, WMSTileLayer, ZoomControl } from 'react-leaflet';
 
 import type { LayerKey } from '../../hooks/useDashboard';
 import type { FireSpread } from '../../hooks/useFireSpread';
@@ -28,12 +29,35 @@ function ViewportObserver({ onViewport }: { onViewport: (viewport: MapViewport) 
   return null;
 }
 
-export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, selectedFireId, onSelectFire, onViewport, fireSpread }: {
+function SpreadAutoFocus({ fireSpread, followSpread }: { fireSpread: FireSpread; followSpread: boolean }) {
+  const map = useMap();
+  const hasFocusedPlayback = useRef(false);
+  useEffect(() => {
+    if (!followSpread) {
+      hasFocusedPlayback.current = false;
+      return;
+    }
+    if (hasFocusedPlayback.current || !fireSpread.data) return;
+    const snapshot = fireSpread.data.snapshots[Math.min(fireSpread.hour, fireSpread.data.max_hours)];
+    if (!snapshot || snapshot.polygon.length < 3) return;
+    const bounds = latLngBounds(snapshot.polygon.map((point) => [point.lat, point.lon]));
+    hasFocusedPlayback.current = true;
+    map.fitBounds(bounds.pad(0.35), {
+      animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      duration: 0.55,
+      padding: [42, 42],
+      maxZoom: 13,
+    });
+  }, [fireSpread.data, fireSpread.hour, followSpread, map]);
+  return null;
+}
+
+export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, selectedFireId, onSelectFire, onViewport, fireSpread, followSpread = false }: {
   layers: Record<LayerKey, boolean>;
   baseMap: 'satellite' | 'street'; initialView?: 'site' | 'global';
   fires: FireDetection[]; selectedFireId: string | null;
   onSelectFire: (id: string | null) => void; onViewport: (viewport: MapViewport) => void;
-  fireSpread: FireSpread;
+  fireSpread: FireSpread; followSpread?: boolean;
 }) {
   const [tileFailed, setTileFailed] = useState(false);
   const tile = baseMap === 'satellite'
@@ -42,6 +66,7 @@ export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, sele
   return (
     <div className="map-canvas" aria-label="Mapa de riesgo de incendio">
       <MapContainer center={initialView === 'global' ? [20, 0] : SITE} zoom={initialView === 'global' ? 2 : 12} minZoom={2} zoomControl={false} preferCanvas className="leaflet-map">
+        <ZoomControl position="bottomright" />
         <TileLayer key={baseMap} url={tile.url} attribution={tile.attribution} eventHandlers={{ tileerror: () => setTileFailed(true), tileload: () => setTileFailed(false) }} />
         {layers.fire && <WMSTileLayer
           url="/api/fires/wms"
@@ -53,6 +78,7 @@ export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, sele
         />}
         <MapOverlays layers={layers} fires={fires} selectedFireId={selectedFireId} onSelectFire={onSelectFire} fireSpread={fireSpread} />
         <MapController />
+        <SpreadAutoFocus fireSpread={fireSpread} followSpread={followSpread} />
         <ViewportObserver onViewport={onViewport} />
       </MapContainer>
       {tileFailed && <div className="map-warning" role="status">El mapa base no está disponible</div>}

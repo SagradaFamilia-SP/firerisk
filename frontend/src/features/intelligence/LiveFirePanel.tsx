@@ -1,3 +1,5 @@
+import { Gauge, MapPin, Satellite, Thermometer, X } from 'lucide-react';
+
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
 import type { FirmsSource } from '../../types/api';
@@ -56,11 +58,25 @@ export function LiveFirePanel({ liveFires, fireSpread }: { liveFires: LiveFires;
         {state.data.meta.count > 8000 ? ' · Mapa limitado a las 8.000 observaciones más recientes' : ''}
       </p>}
       {state.status === 'error' && <p className="data-error" role="alert">{state.error}</p>}
-      {selected && <div className="fire-detail">
-        <strong>{sourceLabels[selected.source]} · {selected.confidence}</strong>
-        <span>{utcDate(selected.acquired_at)} UTC</span>
-        <span>FRP {selected.frp?.toFixed(1) ?? '—'} MW · Brillo {selected.brightness.toFixed(1)} K · {selected.daynight === 'day' ? 'Día' : 'Noche'}</span>
-        <span>{selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}</span>
+      {selected && <div className="selected-fire-drawer" role="region" aria-label="Detalle del fuego seleccionado">
+        <div className="selected-fire-drawer__head">
+          <div>
+            <span className="eyebrow">Incendio seleccionado</span>
+            <strong>{sourceLabels[selected.source]} · {selected.confidence}</strong>
+          </div>
+          <button type="button" aria-label="Cerrar detalle del fuego" onClick={() => liveFires.setSelectedFireId(null)}><X size={15} /></button>
+        </div>
+        <dl className="selected-fire-grid">
+          <div><dt><MapPin size={13} />Ubicación</dt><dd>{selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}</dd></div>
+          <div><dt><Gauge size={13} />Potencia</dt><dd>FRP {selected.frp?.toFixed(1) ?? '—'} MW</dd></div>
+          <div><dt><Thermometer size={13} />Brillo</dt><dd>{selected.brightness.toFixed(1)} K</dd></div>
+          <div><dt><Satellite size={13} />Sensor</dt><dd>{selected.satellite} · {selected.instrument}</dd></div>
+        </dl>
+        <div className="selected-fire-meta">
+          <span>{utcDate(selected.acquired_at)} UTC</span>
+          <span>{selected.daynight === 'day' ? 'Día' : 'Noche'}</span>
+          {selected.scan && selected.track && <span>Scan {selected.scan.toFixed(2)} · Track {selected.track.toFixed(2)}</span>}
+        </div>
         <small>Anomalía térmica satelital; no confirma por sí sola un incendio.</small>
         {fireSpread.status === 'loading' && <span className="data-hint">Calculando radio de propagación…</span>}
         {fireSpread.status === 'error' && <span className="data-error" role="alert">{fireSpread.error}</span>}

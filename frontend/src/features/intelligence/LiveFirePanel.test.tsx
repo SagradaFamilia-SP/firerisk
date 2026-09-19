@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { FireSpread } from '../../hooks/useFireSpread';
@@ -16,13 +16,13 @@ const detection = {
   daynight: 'night' as const,
 };
 
-function liveFires(data: FireResponse, selectedFireId: string | null = null): LiveFires {
+function liveFires(data: FireResponse, selectedFireId: string | null = null, setSelectedFireId = vi.fn()): LiveFires {
   return {
     state: { status: 'success', data, error: null },
     viewport: { west: -7, south: 39, east: -5, north: 41, zoom: 7 },
     filters: { hours: 24, sources: ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT'], minConfidence: 'low' },
     selectedFireId,
-    updateViewport: vi.fn(), updateFilters: vi.fn(), setSelectedFireId: vi.fn(),
+    updateViewport: vi.fn(), updateFilters: vi.fn(), setSelectedFireId,
   };
 }
 
@@ -40,6 +40,18 @@ describe('LiveFirePanel', () => {
     expect(screen.getByText(/Noche/)).toBeInTheDocument();
     expect(screen.getByText(/Datos en caché/)).toBeInTheDocument();
     expect(screen.getByText(/no confirma por sí sola un incendio/)).toBeInTheDocument();
+  });
+
+  it('opens a right-side selected fire menu with location and close action', () => {
+    const setSelectedFireId = vi.fn();
+    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id, setSelectedFireId)} fireSpread={idleFireSpread} />);
+    expect(screen.getByRole('region', { name: 'Detalle del fuego seleccionado' })).toBeInTheDocument();
+    expect(screen.getByText('Incendio seleccionado')).toBeInTheDocument();
+    expect(screen.getByText('39.6810, -6.3470')).toBeInTheDocument();
+    expect(screen.getByText('FRP 18.7 MW')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar detalle del fuego' }));
+    expect(setSelectedFireId).toHaveBeenCalledWith(null);
   });
 
   it('states an empty fresh viewport without inventing a fire', () => {

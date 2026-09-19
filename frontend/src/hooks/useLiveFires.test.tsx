@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiClient } from '../services/api';
-import type { FireResponse } from '../types/api';
+import type { FireDetection, FireResponse } from '../types/api';
 import { useLiveFires } from './useLiveFires';
 
 vi.mock('../services/api', async (importOriginal) => {
@@ -23,6 +23,23 @@ const response: FireResponse = {
   },
 };
 
+const detection = (id: string, latitude: number, longitude: number): FireDetection => ({
+  id,
+  latitude,
+  longitude,
+  acquired_at: '2026-09-19T10:34:00Z',
+  satellite: 'N21',
+  instrument: 'VIIRS',
+  source: 'VIIRS_NOAA21_NRT',
+  confidence: 'nominal',
+  brightness: 305.4,
+  brightness_ti5: 282.28,
+  frp: 3.31,
+  scan: 0.71,
+  track: 0.75,
+  daynight: 'night',
+});
+
 describe('useLiveFires', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,11 +48,11 @@ describe('useLiveFires', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('does not request structured detections below zoom 5', async () => {
+  it('requests structured detections from the full map zoom', async () => {
     const { result } = renderHook(() => useLiveFires());
-    act(() => result.current.updateViewport({ west: -7, south: 39, east: -5, north: 41, zoom: 4 }));
+    act(() => result.current.updateViewport({ west: -180, south: -85, east: 180, north: 85, zoom: 2 }));
     await act(() => vi.advanceTimersByTimeAsync(400));
-    expect(apiClient.fires).not.toHaveBeenCalled();
+    expect(apiClient.fires).toHaveBeenCalledTimes(1);
   });
 
   it('debounces viewport changes and cancels the obsolete request', async () => {
@@ -57,5 +74,45 @@ describe('useLiveFires', () => {
     act(() => result.current.updateViewport({ ...viewport }));
     await act(() => vi.advanceTimersByTimeAsync(400));
     expect(apiClient.fires).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears old detections while loading a new distant viewport', async () => {
+    const americanFire = detection('america-fire', 38.9355, -112.8171);
+    const firstResponse = { ...response, detections: [americanFire] };
+    let resolveSecond: (value: FireResponse) => void = () => undefined;
+    const secondResponse = new Promise<FireResponse>((resolve) => {
+      resolveSecond = resolve;
+    });
+    vi.mocked(apiClient.fires).mockResolvedValueOnce(firstResponse).mockReturnValueOnce(secondResponse);
+
+    const { result } = renderHook(() => useLiveFires());
+    act(() => result.current.updateViewport({ west: -114, south: 31, east: -60, north: 54, zoom: 5 }));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    await act(async () => undefined);
+
+    expect(result.current.state.data?.detections[0]?.id).toBe('america-fire');
+
+    act(() => result.current.updateViewport({ west: -10, south: 35, east: 4, north: 44, zoom: 6 }));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+
+    expect(result.current.state.status).toBe('loading');
+    expect(result.current.state.data).toBeNull();
+
+    await act(async () => resolveSecond(response));
+  });
+
+  it('clears the selected fire when panning outside its viewport', async () => {
+    const americanFire = detection('america-fire', 38.9355, -112.8171);
+    vi.mocked(apiClient.fires).mockResolvedValueOnce({ ...response, detections: [americanFire] });
+
+    const { result } = renderHook(() => useLiveFires());
+    act(() => result.current.updateViewport({ west: -114, south: 31, east: -60, north: 54, zoom: 5 }));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    await act(async () => undefined);
+    act(() => result.current.setSelectedFireId('america-fire'));
+
+    act(() => result.current.updateViewport({ west: -10, south: 35, east: 4, north: 44, zoom: 6 }));
+
+    expect(result.current.selectedFireId).toBeNull();
   });
 });

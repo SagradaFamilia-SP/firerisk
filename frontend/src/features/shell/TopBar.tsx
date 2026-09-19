@@ -1,11 +1,13 @@
-import { Flame } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { StatusPill } from '../../components/StatusPill';
 import type { AsyncState } from '../../hooks/useDashboard';
 import type { HealthResponse } from '../../types/api';
 
-export function TopBar({ health }: { health: AsyncState<HealthResponse> }) {
+export function TopBar({ health, location, context, selected }: {
+  health: AsyncState<HealthResponse>; location: string; context: string; selected: boolean;
+}) {
   const [time, setTime] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setTime(new Date()), 1_000);
@@ -15,16 +17,17 @@ export function TopBar({ health }: { health: AsyncState<HealthResponse> }) {
   const modelOnline = online && health.data.model_online;
   return (
     <header className="topbar">
-      <div className="brand">
-        <span className="brand__mark"><Flame size={20} fill="currentColor" /></span>
-        <span><strong>IGNIS</strong><small>Wildfire intelligence</small></span>
+      <div className="topbar__site">
+        <span className="topbar__live" aria-hidden="true" />
+        <strong>{location}</strong>
+        <span>· {context}</span>
+        <b>{selected ? 'FOCO SELECCIONADO' : 'MONITORIZACIÓN'}</b>
       </div>
       <div className="topbar__status">
-        <StatusPill tone={online ? 'online' : 'offline'}>{online ? 'API operativa' : 'API sin conexión'}</StatusPill>
-        <StatusPill tone={modelOnline ? 'online' : 'neutral'}>{modelOnline ? 'Agente conectado' : 'Fallback preparado'}</StatusPill>
-        <time dateTime={time.toISOString()}>{time.toISOString().slice(11, 19)} <small>UTC</small></time>
+        <StatusPill tone={online ? 'online' : 'offline'}>{online ? 'API OPERATIVA' : 'API SIN CONEXIÓN'}</StatusPill>
+        <StatusPill tone={modelOnline ? 'online' : 'neutral'}>{modelOnline ? 'AGENTE CONECTADO' : 'FALLBACK PREPARADO'}</StatusPill>
+        <time dateTime={time.toISOString()}><MapPin size={12} aria-hidden="true" />{time.toISOString().slice(11, 19)} <small>UTC</small></time>
       </div>
     </header>
   );
 }
-

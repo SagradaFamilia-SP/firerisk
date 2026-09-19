@@ -11,7 +11,8 @@ type Dashboard = ReturnType<typeof useDashboard>;
 
 export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: Dashboard; liveFires: LiveFires; fireSpread: FireSpread }) {
   const [centerKey, setCenterKey] = useState(0);
-  const [view, setView] = useState<'site' | 'global'>('site');
+  const [view, setView] = useState<'site' | 'global'>('global');
+  const [timelinePlaying, setTimelinePlaying] = useState(false);
   return (
     <div className="map-workspace">
       <FireRiskMap
@@ -24,6 +25,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: 
         onSelectFire={liveFires.setSelectedFireId}
         onViewport={liveFires.updateViewport}
         fireSpread={fireSpread}
+        followSpread={timelinePlaying}
       />
       <MapToolbar
         baseMap={dashboard.baseMap}
@@ -31,7 +33,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: 
         onCenter={() => { setView('site'); setCenterKey((key) => key + 1); }}
         onGlobal={() => { setView('global'); setCenterKey((key) => key + 1); }}
       />
-      {fireSpread.data && <ForecastTimeline hour={fireSpread.hour} onChange={fireSpread.setHour} />}
+      {fireSpread.data && <ForecastTimeline hour={fireSpread.hour} onChange={fireSpread.setHour} onPlayingChange={setTimelinePlaying} />}
       {fireSpread.status === 'loading' && <span className="map-updating">Calculando propagación…</span>}
     </div>
   );

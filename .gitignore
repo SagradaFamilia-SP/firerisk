@@ -14,6 +14,6 @@ coverage/
 *.log
 .superpowers/sdd/
 docs/superpowers
-private.key
-./backend/model/
+backend/private.key
+backend/models/
 

@@ -1,0 +1,2 @@
+"""Static domain data."""
+

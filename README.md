@@ -1,3 +1,88 @@
-# firerisk
-Config github acc
-Roger
+# IGNIS — Wildfire Intelligence
+
+Monorepo de la demo operativa de riesgo de incendios de IGNIS. Incluye un backend FastAPI para simulación, meteorología y planes de actuación, y un dashboard React centrado en mapa para explorar el impacto sobre activos críticos.
+
+## Estructura
+
+```text
+.
+├── backend/     API FastAPI, dominio y pruebas
+├── frontend/    React + TypeScript + Vite
+├── docs/        Especificación y plan técnico
+└── Makefile     Comandos de desarrollo
+```
+
+`fire-risk-demo/` conserva temporalmente el prototipo previo como referencia local. Las aplicaciones canónicas son `backend/` y `frontend/`.
+
+## Requisitos
+
+- Python 3.11 o superior
+- Node.js 20 o superior
+- npm 10 o superior
+
+## Instalación
+
+Desde la raíz del repositorio:
+
+```bash
+make install
+```
+
+También puedes instalar cada aplicación por separado:
+
+```bash
+python3 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -e "backend[dev]"
+
+cd frontend
+npm install
+```
+
+## Desarrollo
+
+Levanta el backend en una terminal:
+
+```bash
+make backend
+```
+
+Levanta el frontend en otra:
+
+```bash
+make frontend
+```
+
+Abre `http://127.0.0.1:5173`. Vite redirige automáticamente las peticiones `/api` a FastAPI.
+
+- Dashboard: `http://127.0.0.1:5173`
+- API: `http://127.0.0.1:8000/api/health`
+- Documentación OpenAPI: `http://127.0.0.1:8000/docs`
+
+## Configuración
+
+Copia el ejemplo del backend si quieres cambiar el modelo local:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Variables disponibles:
+
+- `MODEL_BASE_URL`: endpoint OpenAI-compatible. Por defecto `http://localhost:30000/v1`.
+- `MODEL_ID`: identificador del modelo servido.
+- `FRONTEND_ORIGINS`: orígenes CORS separados por comas.
+
+Si el modelo no responde o devuelve contenido inválido, `/api/agent-plan` entrega automáticamente un plan determinista de contingencia.
+
+## Calidad
+
+```bash
+make test    # pytest + Vitest
+make lint    # TypeScript + ESLint
+make build   # build de producción Vite
+make check   # todas las comprobaciones
+```
+
+El mapa utiliza teselas remotas de Esri y OpenStreetMap. La meteorología real se consulta a Open-Meteo, por lo que estas funciones requieren conexión a Internet.
+
+> IGNIS es una demo de apoyo visual para una hackathon. La propagación mostrada es una simulación y no sustituye información oficial ni protocolos de emergencias.

@@ -1,0 +1,13 @@
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+html, body, #root { width: 100%; min-height: 100%; margin: 0; }
+body { overflow-x: hidden; font-family: var(--font); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; }
+button { color: inherit; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+button:disabled { cursor: wait; opacity: 0.58; }
+h1, h2, h3, p { margin-top: 0; }
+.eyebrow { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; }
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }

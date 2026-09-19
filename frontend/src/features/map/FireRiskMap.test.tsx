@@ -1,0 +1,39 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+
+import { FireRiskMap } from './FireRiskMap';
+
+vi.mock('react-leaflet', () => ({
+  MapContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  TileLayer: ({ eventHandlers }: { eventHandlers?: { tileerror?: () => void } }) =>
+    <button type="button" onClick={() => eventHandlers?.tileerror?.()}>Simular fallo de tesela</button>,
+  Circle: () => null,
+  CircleMarker: () => null,
+  LayersControl: ({ children }: { children: ReactNode }) => <>{children}</>,
+  LayerGroup: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Marker: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Polygon: () => null,
+  Polyline: () => null,
+  Popup: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Rectangle: () => null,
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useMap: () => ({ flyTo: vi.fn(), invalidateSize: vi.fn() }),
+}));
+
+describe('FireRiskMap', () => {
+  it('contains tile failure without hiding map controls', () => {
+    render(
+      <FireRiskMap
+        scenario={{ hour: 3, wind_speed: 41, wind_direction: 68, temperature: 39, humidity: 14, hotspot_active: true, hotspot_x: 25, hotspot_y: 58 }}
+        simulation={null}
+        layers={{ risk: true, fire: true, spread: true, wind: true, assets: true }}
+        baseMap="satellite"
+        selectedAssetId={null}
+      />,
+    );
+    expect(screen.getByLabelText('Mapa de riesgo de incendio')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Simular fallo de tesela' }));
+    expect(screen.getByText('El mapa base no está disponible')).toBeInTheDocument();
+  });
+});

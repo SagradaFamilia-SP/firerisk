@@ -1,0 +1,2 @@
+"""IGNIS backend application package."""
+

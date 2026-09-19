@@ -37,6 +37,7 @@ from skimage import measure
 
 from app.schemas.fires import FireQuery
 from app.schemas.spread import SpreadPoint, SpreadResponse, SpreadSnapshot, WeatherSample
+from app.services.cache import TTLCache
 from app.services.firms import FirmsNotConfiguredError, FirmsUnavailableError, get_firms_service
 
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
@@ -64,6 +65,28 @@ FIRMS_RECENT_HOURS = 8.0
 
 MAX_ROS_M_MIN = 80.0
 MIN_ROS_M_MIN = 0.005
+
+# Byram (1959) fireline intensity: I = H * w * r (kW/m).
+# H (heat of combustion) barely varies across forest fuels in practice, so it
+# is treated as a constant here, matching standard fire-behaviour practice.
+HEAT_OF_COMBUSTION_KJ_KG = 18_600.0
+LB_FT2_TO_KG_M2 = 4.882428  # 0.45359237 kg / 0.09290304 m2
+
+# Open-Meteo's free tier is rate-limited per hour/day; caching cuts down on
+# repeat calls for the same fire (or nearby ones) instead of hitting it on
+# every single click, and lets a stale-but-fresh-enough result keep the
+# feature working through a temporary rate-limit window instead of a 502.
+WEATHER_CACHE_TTL_SECONDS = 900  # 15 min: forecasts don't meaningfully change faster than this
+ELEVATION_CACHE_TTL_SECONDS = 21_600  # 6h: terrain never changes; just bounds cache growth
+WEATHER_FORECAST_HOURS = 25  # covers every allowed max_hours (<=24) from a single cached fetch
+LOCATION_CACHE_PRECISION = 2  # ~1.1 km buckets: plenty for a regional weather forecast
+
+_weather_cache: TTLCache[list[dict]] = TTLCache(WEATHER_CACHE_TTL_SECONDS)
+_elevation_cache: TTLCache[np.ndarray] = TTLCache(ELEVATION_CACHE_TTL_SECONDS)
+
+
+def _location_cache_key(lat: float, lon: float, precision: int = LOCATION_CACHE_PRECISION) -> str:
+    return f"{round(lat, precision):.{precision}f},{round(lon, precision):.{precision}f}"
 
 
 class SpreadUnavailableError(RuntimeError):
@@ -193,6 +216,25 @@ def build_fuel_grid(worldcover: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         fuel_models[index] = fm
         burnable[index] = fm is not None
     return fuel_models, burnable
+
+
+def fuel_load_kg_m2(fm: FuelModel) -> float:
+    """
+    Fuel available to the flaming front (kg/m2), for Byram's intensity.
+
+    Assumes the modelled dead-fuel bed (1h+10h+100h loads) is fully consumed
+    in the flaming front, the standard simplification used whenever a
+    dedicated combustion/consumption sub-model isn't available (Byram 1959,
+    and how BehavePlus-style tools report fireline intensity by default).
+    """
+    total_lb_ft2 = (fm.load_1h_lb_ft2 + fm.load_10h_lb_ft2 + fm.load_100h_lb_ft2) * fm.load_scale
+    return total_lb_ft2 * LB_FT2_TO_KG_M2
+
+
+def fireline_intensity_kw_m(fuel_load_kg_m2_value: float, ros_m_min: float) -> float:
+    """Byram (1959): I = H * w * r, with r converted from m/min to m/s so I comes out in kW/m."""
+    ros_m_s = max(ros_m_min, 0.0) / 60.0
+    return HEAT_OF_COMBUSTION_KJ_KG * fuel_load_kg_m2_value * ros_m_s
 
 
 # =============================================================================
@@ -342,6 +384,13 @@ def _interp2_regular(coarse: np.ndarray, out_rows: int, out_cols: int) -> np.nda
 
 async def fetch_elevation_grid(lat_grid: np.ndarray, lon_grid: np.ndarray) -> tuple[np.ndarray, str]:
     rows, cols = lat_grid.shape
+    center_lat, center_lon = float(lat_grid[rows // 2, cols // 2]), float(lon_grid[rows // 2, cols // 2])
+    # A finer bucket (~111 m) than weather's, since terrain genuinely varies
+    # over shorter distances and this grid's exact centre matters for slope.
+    cache_key = _location_cache_key(center_lat, center_lon, precision=3)
+    if (cached := _elevation_cache.get_fresh(cache_key)) is not None:
+        return cached, "open-meteo-dem"
+
     row_idx = list(range(0, rows, DEM_STRIDE))
     col_idx = list(range(0, cols, DEM_STRIDE))
     if row_idx[-1] != rows - 1:
@@ -369,8 +418,12 @@ async def fetch_elevation_grid(lat_grid: np.ndarray, lon_grid: np.ndarray) -> tu
                 elevations.extend(float(x) for x in response.json()["elevation"])
 
         coarse_dem = np.asarray(elevations, dtype=float).reshape(coarse_lat.shape)
-        return _interp2_regular(coarse_dem, rows, cols), "open-meteo-dem"
+        elevation = _interp2_regular(coarse_dem, rows, cols)
+        _elevation_cache.set(cache_key, elevation)
+        return elevation, "open-meteo-dem"
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        if (stale := _elevation_cache.get_any(cache_key)) is not None:
+            return stale, "open-meteo-dem"
         return np.zeros((rows, cols), dtype=float), "flat-fallback"
 
 
@@ -458,7 +511,11 @@ async def fetch_worldcover_grid(lat_grid: np.ndarray, lon_grid: np.ndarray) -> t
 # =============================================================================
 
 
-async def fetch_hourly_weather(lat: float, lon: float, hours: int) -> list[dict]:
+async def fetch_hourly_weather(lat: float, lon: float) -> list[dict]:
+    cache_key = _location_cache_key(lat, lon)
+    if cached := _weather_cache.get_fresh(cache_key):
+        return cached
+
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -472,7 +529,7 @@ async def fetch_hourly_weather(lat: float, lon: float, hours: int) -> list[dict]
                 "wind_gusts_10m",
             ]
         ),
-        "forecast_hours": max(hours + 1, 12),
+        "forecast_hours": WEATHER_FORECAST_HOURS,
         "wind_speed_unit": "kmh",
         "timezone": "UTC",
     }
@@ -495,8 +552,11 @@ async def fetch_hourly_weather(lat: float, lon: float, hours: int) -> list[dict]
         ]
         if not result:
             raise SpreadUnavailableError("Meteorología no disponible")
+        _weather_cache.set(cache_key, result)
         return result
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        if stale := _weather_cache.get_any(cache_key):
+            return stale
         raise SpreadUnavailableError("Meteorología no disponible") from exc
 
 
@@ -575,10 +635,13 @@ def simulate_grid(
     ignition_cells: list[tuple[int, int]],
     cell_size_m: float,
     max_hours: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
+    """Returns (arrival_time_minutes, ros_m_min_at_arrival): the ROS that actually caused
+    each cell to ignite, reused for fireline intensity (Byram) alongside the ROS itself."""
     rows, cols = burnable.shape
     max_time = max_hours * 60.0
     arrival = np.full((rows, cols), np.inf, dtype=float)
+    ros_at_arrival = np.full((rows, cols), np.nan, dtype=float)
     queue: list[tuple[float, int, int]] = []
 
     for r, c in ignition_cells:
@@ -621,9 +684,10 @@ def simulate_grid(
             new_time = current_time + distance_m / ros
             if new_time < arrival[nr, nc] and new_time <= max_time:
                 arrival[nr, nc] = new_time
+                ros_at_arrival[nr, nc] = ros
                 heapq.heappush(queue, (new_time, nr, nc))
 
-    return arrival
+    return arrival, ros_at_arrival
 
 
 # =============================================================================
@@ -646,6 +710,8 @@ def _ring_from_contour(contour: np.ndarray, lat_grid: np.ndarray, lon_grid: np.n
 
 def build_snapshots(
     arrival: np.ndarray,
+    ros_at_arrival: np.ndarray,
+    fuel_models: np.ndarray,
     lat_grid: np.ndarray,
     lon_grid: np.ndarray,
     center_lat: float,
@@ -656,6 +722,17 @@ def build_snapshots(
     snapshots: list[SpreadSnapshot] = []
     cell_area_km2 = _cell_area_km2(cell_size_m)
 
+    # Fireline intensity (Byram 1959: I = H * w * r) for every cell, using the
+    # real ROS that actually ignited it (captured by simulate_grid) and the
+    # fuel load of its own Anderson model. Cells never reached keep ros=NaN.
+    fuel_load_grid = np.zeros(fuel_models.shape, dtype=float)
+    for index in np.ndindex(fuel_models.shape):
+        fm = fuel_models[index]
+        if fm is not None:
+            fuel_load_grid[index] = fuel_load_kg_m2(fm)
+    intensity_grid = HEAT_OF_COMBUSTION_KJ_KG * fuel_load_grid * (np.nan_to_num(ros_at_arrival, nan=0.0) / 60.0)
+
+    previous_threshold = -1.0
     for hour in range(max_hours + 1):
         threshold = hour * 60.0
         mask = np.isfinite(arrival) & (arrival <= threshold)
@@ -680,6 +757,18 @@ def build_snapshots(
         else:
             radius_min = radius_max = radius_mean = 0.0
 
+        # Only the cells that ignited *during this hour's window* represent the
+        # active flaming front right now; already-burned interior cells (or a
+        # still-unreached hour 0) are excluded rather than diluting the stats.
+        newly_burned = mask & (arrival > previous_threshold) & np.isfinite(ros_at_arrival)
+        if np.any(newly_burned):
+            front_intensities = intensity_grid[newly_burned]
+            intensity_min = float(front_intensities.min())
+            intensity_mean = float(front_intensities.mean())
+            intensity_max = float(front_intensities.max())
+        else:
+            intensity_min = intensity_mean = intensity_max = 0.0
+
         snapshots.append(
             SpreadSnapshot(
                 hour=hour,
@@ -688,8 +777,12 @@ def build_snapshots(
                 radius_km_mean=round(radius_mean, 3),
                 area_km2=round(area_km2, 3),
                 rings=rings,
+                intensity_kw_m_min=round(intensity_min, 1),
+                intensity_kw_m_mean=round(intensity_mean, 1),
+                intensity_kw_m_max=round(intensity_max, 1),
             )
         )
+        previous_threshold = threshold
 
     return snapshots
 
@@ -716,6 +809,11 @@ def _build_model_notes(terrain_source: str, fuel_source: str, firms_detections_u
         "detiene ahí; el dominio no crece dinámicamente con el viento o las horas pedidas.",
         "No se modela fuego de copa, pavesas/proyección de brasas, cortafuegos, carreteras como "
         "barrera, supresión activa ni retroalimentación fuego-atmósfera.",
+        "La intensidad de línea de fuego (kW/m) usa la fórmula de Byram (1959) I = H·w·r, con H "
+        "(calor de combustión) constante en 18.600 kJ/kg, w la carga total del modelo de combustible "
+        "Anderson de cada celda (se asume consumo completo del combustible fino modelado) y r el ROS "
+        "real que encendió esa celda en la simulación; solo se calcula sobre las celdas que se "
+        "incendiaron durante cada hora, no sobre todo el área ya quemada.",
     ]
     if terrain_source == "flat-fallback":
         notes.append(
@@ -733,7 +831,7 @@ def _build_model_notes(terrain_source: str, fuel_source: str, firms_detections_u
 async def simulate_spread(lat: float, lon: float, max_hours: int) -> SpreadResponse:
     lat_grid, lon_grid = make_grid(lat, lon, GRID_SIZE, CELL_SIZE_M)
 
-    weather = await fetch_hourly_weather(lat, lon, max_hours)
+    weather = await fetch_hourly_weather(lat, lon)
     elevation, terrain_source = await fetch_elevation_grid(lat_grid, lon_grid)
     slope, upslope_bearing = terrain_from_dem(elevation, CELL_SIZE_M)
     worldcover, fuel_source = await fetch_worldcover_grid(lat_grid, lon_grid)
@@ -747,10 +845,12 @@ async def simulate_spread(lat: float, lon: float, max_hours: int) -> SpreadRespo
         if fuel_models[r, c] is None:
             fuel_models[r, c] = FM1
 
-    arrival = simulate_grid(
+    arrival, ros_at_arrival = simulate_grid(
         weather, fuel_models, burnable, slope, upslope_bearing, ignition_cells, CELL_SIZE_M, max_hours
     )
-    snapshots = build_snapshots(arrival, lat_grid, lon_grid, lat, lon, CELL_SIZE_M, max_hours)
+    snapshots = build_snapshots(
+        arrival, ros_at_arrival, fuel_models, lat_grid, lon_grid, lat, lon, CELL_SIZE_M, max_hours
+    )
 
     return SpreadResponse(
         center=SpreadPoint(lat=lat, lon=lon),

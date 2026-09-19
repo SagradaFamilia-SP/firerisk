@@ -13,11 +13,17 @@ from app.services.spread import (
     WEATHER_URL,
     FM1,
     FM3,
+    FM6,
     angular_diff_deg,
     build_fuel_grid,
+    build_snapshots,
     directional_ros,
     estimate_dead_fuel_moisture,
+    fetch_elevation_grid,
+    fetch_hourly_weather,
     find_ignition_cells,
+    fireline_intensity_kw_m,
+    fuel_load_kg_m2,
     haversine_km,
     latlon_to_cell,
     make_grid,
@@ -26,6 +32,17 @@ from app.services.spread import (
     simulate_spread,
     worldcover_to_fuel_model,
 )
+
+@pytest.fixture(autouse=True)
+def _reset_open_meteo_caches():
+    # These caches are module-level (they persist across requests within the
+    # running process on purpose), so tests must reset them or an earlier
+    # test's cached weather/elevation for the same coordinates silently
+    # short-circuits a later test's mocked HTTP failure.
+    spread._weather_cache.clear()
+    spread._elevation_cache.clear()
+    yield
+
 
 DRY_HOT_WEATHER = {
     "rh_pct": 15.0,
@@ -113,6 +130,22 @@ def test_build_fuel_grid_marks_water_as_not_burnable() -> None:
     assert fuel_models[0, 0] is FM3
 
 
+def test_fuel_load_matches_lb_ft2_to_kg_m2_conversion() -> None:
+    # FM6: 0.069 + 0.115 + 0.092 = 0.276 lb/ft2, load_scale=1.0
+    assert fuel_load_kg_m2(FM6) == pytest.approx(0.276 * 4.882428, rel=1e-6)
+
+
+def test_fireline_intensity_matches_byram_worked_example() -> None:
+    # Mirrors the user-provided worked example: matorral mediterráneo, viento
+    # moderado -> I = H * w * r = 18600 * 1.5 * 0.2 = 5580 kW/m.
+    intensity = fireline_intensity_kw_m(fuel_load_kg_m2_value=1.5, ros_m_min=12.0)
+    assert intensity == pytest.approx(5580.0, rel=1e-9)
+
+
+def test_fireline_intensity_is_zero_for_zero_ros() -> None:
+    assert fireline_intensity_kw_m(fuel_load_kg_m2_value=2.0, ros_m_min=0.0) == 0.0
+
+
 def test_directional_ros_is_strongly_nonlinear_with_wind() -> None:
     dead_moisture = estimate_dead_fuel_moisture(32.0, 15.0, 0.0)
     downwind = directional_ros(FM3, dead_moisture, 8.0, 270.0, 0.0, 0.0, 90.0)
@@ -142,7 +175,7 @@ def test_simulate_grid_spreads_further_downwind_than_upwind() -> None:
     upslope = np.zeros((rows, cols))
     center = (rows // 2, cols // 2)
 
-    arrival = simulate_grid(
+    arrival, _ros_at_arrival = simulate_grid(
         [DRY_HOT_WEATHER] * 6, fuel_models, burnable, slope, upslope, [center], cell_size_m=100.0, max_hours=4
     )
 
@@ -162,12 +195,37 @@ def test_simulate_grid_stops_at_a_water_barrier() -> None:
     slope = np.zeros((rows, cols))
     upslope = np.zeros((rows, cols))
 
-    arrival = simulate_grid(
+    arrival, _ros_at_arrival = simulate_grid(
         [DRY_HOT_WEATHER] * 6, fuel_models, burnable, slope, upslope, [center], cell_size_m=100.0, max_hours=6
     )
 
     assert not np.isfinite(arrival[center[0], center[1] + 3])  # never crosses the river
     assert np.isfinite(arrival[center[0], center[1] + 1])  # but reaches right up to it
+
+
+def test_build_snapshots_reports_intensity_growing_with_the_active_front() -> None:
+    rows = cols = 15
+    lat_grid, lon_grid = make_grid(41.70, 2.10, rows, 100.0)
+    fuel_models = np.full((rows, cols), FM3, dtype=object)
+    burnable = np.ones((rows, cols), dtype=bool)
+    slope = np.zeros((rows, cols))
+    upslope = np.zeros((rows, cols))
+    center = (rows // 2, cols // 2)
+
+    arrival, ros_at_arrival = simulate_grid(
+        [DRY_HOT_WEATHER] * 8, fuel_models, burnable, slope, upslope, [center], cell_size_m=100.0, max_hours=6
+    )
+    snapshots = build_snapshots(arrival, ros_at_arrival, fuel_models, lat_grid, lon_grid, 41.70, 2.10, 100.0, 6)
+
+    # Hour 0 is just the (unreached-by-neighbour-loop) ignition cell: no
+    # established active front yet, so intensity is reported as zero.
+    assert snapshots[0].intensity_kw_m_max == 0.0
+    # Once the front is moving, a real, non-zero intensity should show up,
+    # bounded sanely (min <= mean <= max) exactly like the radius stats.
+    later = [s for s in snapshots if s.hour > 0 and s.intensity_kw_m_max > 0]
+    assert later, "expected at least one hour with an active, measurable front"
+    for snapshot in later:
+        assert snapshot.intensity_kw_m_min <= snapshot.intensity_kw_m_mean <= snapshot.intensity_kw_m_max
 
 
 def test_ignition_pixel_misclassified_still_burns() -> None:
@@ -189,7 +247,7 @@ def test_ignition_pixel_misclassified_still_burns() -> None:
     slope = np.zeros((rows, cols))
     upslope = np.zeros((rows, cols))
 
-    arrival = simulate_grid(
+    arrival, _ros_at_arrival = simulate_grid(
         [DRY_HOT_WEATHER] * 4, fuel_models, burnable, slope, upslope, [center], cell_size_m=100.0, max_hours=2
     )
 
@@ -320,3 +378,66 @@ async def test_simulate_spread_falls_back_when_worldcover_unavailable(monkeypatc
     assert result.fuel_source == "fallback-grass"
     assert len(result.snapshots) == 3
     assert result.snapshots[-1].radius_km_max > 0.0
+
+
+def _weather_json(hours: int) -> dict:
+    return {
+        "hourly": {
+            "time": [f"2026-09-19T{h:02d}:00" for h in range(hours)],
+            "temperature_2m": [25.0] * hours,
+            "relative_humidity_2m": [40.0] * hours,
+            "precipitation": [0.0] * hours,
+            "wind_speed_10m": [10.0] * hours,
+            "wind_direction_10m": [180.0] * hours,
+            "wind_gusts_10m": [12.0] * hours,
+        }
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_hourly_weather_caches_repeat_calls_for_the_same_location() -> None:
+    route = respx.get(WEATHER_URL).mock(return_value=Response(200, json=_weather_json(25)))
+
+    first = await fetch_hourly_weather(41.70, 2.10)
+    second = await fetch_hourly_weather(41.7001, 2.1001)  # same ~1 km cache bucket
+
+    assert route.call_count == 1
+    assert first == second
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_hourly_weather_serves_stale_cache_when_rate_limited() -> None:
+    route = respx.get(WEATHER_URL).mock(
+        side_effect=[
+            Response(200, json=_weather_json(25)),
+            Response(429, json={"error": True, "reason": "rate limited"}),
+        ]
+    )
+
+    fresh = await fetch_hourly_weather(41.70, 2.10)
+    cache_key = spread._location_cache_key(41.70, 2.10)
+    spread._weather_cache._entries[cache_key].expires_at = 0.0  # force the entry stale
+    stale = await fetch_hourly_weather(41.70, 2.10)
+
+    assert stale == fresh
+    assert route.call_count == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_elevation_grid_caches_repeat_calls_for_the_same_location() -> None:
+    def _elevation_response(request):
+        count = len(request.url.params.get("latitude", "").split(","))
+        return Response(200, json={"elevation": [100] * count})
+
+    route = respx.get(ELEVATION_URL).mock(side_effect=_elevation_response)
+    lat_grid, lon_grid = make_grid(41.70, 2.10, 21, 100.0)
+
+    first, source_first = await fetch_elevation_grid(lat_grid, lon_grid)
+    second, source_second = await fetch_elevation_grid(lat_grid, lon_grid)
+
+    assert route.call_count == 1
+    assert source_first == source_second == "open-meteo-dem"
+    assert np.array_equal(first, second)

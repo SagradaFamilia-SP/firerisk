@@ -21,6 +21,9 @@ class SpreadSnapshot(BaseModel):
     radius_km_mean: float
     area_km2: float
     rings: list[list[SpreadPoint]]
+    intensity_kw_m_min: float
+    intensity_kw_m_mean: float
+    intensity_kw_m_max: float
 
 
 class WeatherSample(BaseModel):

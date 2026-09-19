@@ -36,6 +36,7 @@ export interface SpreadPoint { lat: number; lon: number }
 export interface SpreadSnapshot {
   hour: number; radius_km_min: number; radius_km_max: number; radius_km_mean: number;
   area_km2: number; rings: SpreadPoint[][];
+  intensity_kw_m_min: number; intensity_kw_m_mean: number; intensity_kw_m_max: number;
 }
 
 export interface SpreadResponse {

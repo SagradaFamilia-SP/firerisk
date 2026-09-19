@@ -5,12 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FireRiskMap } from './FireRiskMap';
 
 const fitBounds = vi.fn();
+const flyToBounds = vi.fn();
 
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TileLayer: ({ eventHandlers }: { eventHandlers?: { tileerror?: () => void } }) =>
     <button type="button" onClick={() => eventHandlers?.tileerror?.()}>Simular fallo de tesela</button>,
-  WMSTileLayer: ({ layers, url }: { layers: string; url: string }) => <span>WMS {url} {layers}</span>,
   ZoomControl: ({ position }: { position: string }) => <div aria-label="Control de zoom">Zoom {position} + -</div>,
   Circle: () => null,
   CircleMarker: () => null,
@@ -22,13 +22,14 @@ vi.mock('react-leaflet', () => ({
   Popup: ({ children }: { children: ReactNode }) => <>{children}</>,
   Rectangle: () => null,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  useMap: () => ({ flyTo: vi.fn(), fitBounds, invalidateSize: vi.fn(), getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
+  useMap: () => ({ flyTo: vi.fn(), fitBounds, flyToBounds, invalidateSize: vi.fn(), getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
   useMapEvents: () => ({ getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
 }));
 
 describe('FireRiskMap', () => {
   beforeEach(() => {
     fitBounds.mockClear();
+    flyToBounds.mockClear();
     window.matchMedia = vi.fn().mockReturnValue({ matches: false });
   });
 
@@ -47,8 +48,6 @@ describe('FireRiskMap', () => {
     expect(screen.getByLabelText('Mapa de riesgo de incendio')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Simular fallo de tesela' }));
     expect(screen.getByText('El mapa base no está disponible')).toBeInTheDocument();
-    expect(screen.getByText(/fires_viirs_noaa20_24/)).toBeInTheDocument();
-    expect(screen.getByText(/\/api\/fires\/wms/)).toBeInTheDocument();
     expect(screen.getByLabelText('Control de zoom')).toHaveTextContent('bottomright');
     expect(screen.getByLabelText('Control de zoom')).toHaveTextContent('+ -');
     expect(screen.queryByText(/Foco térmico VIIRS/)).not.toBeInTheDocument();
@@ -70,7 +69,10 @@ describe('FireRiskMap', () => {
         warning: '',
         model_notes: [],
         snapshots: [
-          { hour: 0, radius_km_min: 0, radius_km_mean: 0, radius_km_max: 0, area_km2: 0, rings: [] },
+          {
+            hour: 0, radius_km_min: 0, radius_km_mean: 0, radius_km_max: 0, area_km2: 0, rings: [],
+            intensity_kw_m_min: 0, intensity_kw_m_mean: 0, intensity_kw_m_max: 0,
+          },
           {
             hour: 1,
             radius_km_min: 0.1,
@@ -78,6 +80,7 @@ describe('FireRiskMap', () => {
             radius_km_max: 0.3,
             area_km2: 0.1,
             rings: [[{ lat: 39.7, lon: -6.2 }, { lat: 39.71, lon: -6.19 }, { lat: 39.69, lon: -6.18 }]],
+            intensity_kw_m_min: 500, intensity_kw_m_mean: 800, intensity_kw_m_max: 1200,
           },
           {
             hour: 2,
@@ -86,6 +89,7 @@ describe('FireRiskMap', () => {
             radius_km_max: 0.4,
             area_km2: 0.2,
             rings: [[{ lat: 39.7, lon: -6.2 }, { lat: 39.72, lon: -6.18 }, { lat: 39.68, lon: -6.17 }]],
+            intensity_kw_m_min: 600, intensity_kw_m_mean: 900, intensity_kw_m_max: 1400,
           },
         ],
       },
@@ -104,7 +108,16 @@ describe('FireRiskMap', () => {
       />,
     );
 
-    expect(fitBounds).toHaveBeenCalledTimes(1);
+    // A smooth flyToBounds is used (not the instant-snap-on-big-zoom
+    // fitBounds) so the zoom into the fire always eases in, never jumps.
+    expect(flyToBounds).toHaveBeenCalledTimes(1);
+    expect(fitBounds).not.toHaveBeenCalled();
+    // The timeline is at hour 1, but the very first fit must already frame
+    // the fire's fullest eventual extent (hour 2's larger ring here), not
+    // just the tiny current-hour ring — otherwise the fire visibly grows
+    // past the edges of the frame for the rest of the playback.
+    const firstCallBounds = flyToBounds.mock.calls[0][0];
+    expect(firstCallBounds.contains([39.68, -6.17])).toBe(true);
 
     rerender(
       <FireRiskMap
@@ -119,6 +132,54 @@ describe('FireRiskMap', () => {
       />,
     );
 
+    expect(flyToBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the flight animation and snaps instantly when reduced motion is preferred', () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+    const fireSpread = {
+      status: 'success' as const,
+      error: null,
+      hour: 0,
+      setHour: vi.fn(),
+      data: {
+        center: { lat: 39.7, lon: -6.2 },
+        max_hours: 1,
+        terrain_source: 'flat-fallback' as const,
+        fuel_source: 'fallback-grass' as const,
+        ignition_points: [{ lat: 39.7, lon: -6.2 }],
+        weather: [],
+        warning: '',
+        model_notes: [],
+        snapshots: [
+          {
+            hour: 0,
+            radius_km_min: 0.1,
+            radius_km_mean: 0.2,
+            radius_km_max: 0.3,
+            area_km2: 0.1,
+            rings: [[{ lat: 39.7, lon: -6.2 }, { lat: 39.71, lon: -6.19 }, { lat: 39.69, lon: -6.18 }]],
+            intensity_kw_m_min: 0, intensity_kw_m_mean: 0, intensity_kw_m_max: 0,
+          },
+        ],
+      },
+    };
+
+    render(
+      <FireRiskMap
+        layers={{ fire: true, spread: true }}
+        baseMap="satellite"
+        fires={[]}
+        selectedFireId={null}
+        onSelectFire={vi.fn()}
+        onViewport={vi.fn()}
+        fireSpread={fireSpread}
+        followSpread
+      />,
+    );
+
     expect(fitBounds).toHaveBeenCalledTimes(1);
+    expect(fitBounds.mock.calls[0][1]).toMatchObject({ animate: false });
+    expect(flyToBounds).not.toHaveBeenCalled();
   });
 });

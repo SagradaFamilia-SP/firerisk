@@ -11,12 +11,19 @@ const DEFAULT_FILTERS: FireFilters = {
 };
 const MIN_FIRE_FETCH_ZOOM = 2;
 
+// A small buffer around the viewport's own size, so a fire right at the edge
+// isn't dropped by rounding/padding differences between the map's reported
+// bounds and the fire's exact point — e.g. right after a programmatic
+// fitBounds (auto-focusing the selected fire), which must never itself
+// deselect the very fire it just framed.
 function viewportContainsFire(viewport: MapViewport, fire: { latitude: number; longitude: number }) {
+  const latBuffer = (viewport.north - viewport.south) * 0.15;
+  const lonBuffer = (viewport.east - viewport.west) * 0.15;
   return (
-    fire.latitude >= viewport.south
-    && fire.latitude <= viewport.north
-    && fire.longitude >= viewport.west
-    && fire.longitude <= viewport.east
+    fire.latitude >= viewport.south - latBuffer
+    && fire.latitude <= viewport.north + latBuffer
+    && fire.longitude >= viewport.west - lonBuffer
+    && fire.longitude <= viewport.east + lonBuffer
   );
 }
 
@@ -38,7 +45,10 @@ export function useLiveFires() {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       lastRequest.current = { key: requestKey, requestedAt: Date.now() };
-      setState({ status: 'loading', data: null, error: null });
+      // Keep showing the previously loaded markers while the new viewport's
+      // detections load, instead of flashing everything to empty on every
+      // pan/zoom — they get replaced once the fresh batch actually arrives.
+      setState((current) => ({ status: 'loading', data: current.data, error: null }));
       apiClient.fires(viewport, filters, controller.signal).then(
         (data) => {
           if (!controller.signal.aborted) setState({ status: 'success', data, error: null });

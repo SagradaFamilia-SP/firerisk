@@ -6,6 +6,7 @@ import type { LiveFires } from '../../hooks/useLiveFires';
 import { FireRiskMap } from './FireRiskMap';
 import { ForecastTimeline } from './ForecastTimeline';
 import { MapToolbar } from './MapToolbar';
+import { sampleFiresForRender } from './sampleFires';
 
 type Dashboard = ReturnType<typeof useDashboard>;
 
@@ -20,7 +21,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread }: { dashboard: 
         layers={dashboard.layers}
         baseMap={dashboard.baseMap}
         initialView={view}
-        fires={(liveFires.state.data?.detections ?? []).slice(0, 8000)}
+        fires={sampleFiresForRender(liveFires.state.data?.detections ?? [])}
         selectedFireId={liveFires.selectedFireId}
         onSelectFire={liveFires.setSelectedFireId}
         onViewport={liveFires.updateViewport}

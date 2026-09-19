@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { latLngBounds } from 'leaflet';
-import { MapContainer, TileLayer, useMap, useMapEvents, WMSTileLayer, ZoomControl } from 'react-leaflet';
+import { latLngBounds, type LatLngBounds } from 'leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
 
 import type { LayerKey } from '../../hooks/useDashboard';
 import type { FireSpread } from '../../hooks/useFireSpread';
-import type { FireDetection, MapViewport } from '../../types/api';
+import type { FireDetection, MapViewport, SpreadResponse } from '../../types/api';
 import { SITE } from './geo';
 import { MapOverlays } from './MapOverlays';
+
+// The fullest extent the fire ever reaches, so the very first fit-bounds on
+// play already frames the whole animation — otherwise fitting to hour 0/1
+// (a tiny ~100 m ring) leaves the view too tight, and the fire visibly grows
+// past the edges of the frame for the rest of the playback.
+function boundsForFullSpread(data: SpreadResponse): LatLngBounds | null {
+  for (let hour = data.max_hours; hour >= 0; hour -= 1) {
+    const points = data.snapshots[hour]?.rings.flat() ?? [];
+    if (points.length >= 3) return latLngBounds(points.map((point): [number, number] => [point.lat, point.lon]));
+  }
+  return null;
+}
 
 function MapController() {
   const map = useMap();
@@ -38,18 +50,20 @@ function SpreadAutoFocus({ fireSpread, followSpread }: { fireSpread: FireSpread;
       return;
     }
     if (hasFocusedPlayback.current || !fireSpread.data) return;
-    const snapshot = fireSpread.data.snapshots[Math.min(fireSpread.hour, fireSpread.data.max_hours)];
-    const points = snapshot?.rings.flat() ?? [];
-    if (points.length < 3) return;
-    const bounds = latLngBounds(points.map((point) => [point.lat, point.lon]));
+    const { center } = fireSpread.data;
+    const bounds = boundsForFullSpread(fireSpread.data)
+      ?? latLngBounds([center.lat - 0.01, center.lon - 0.01], [center.lat + 0.01, center.lon + 0.01]);
     hasFocusedPlayback.current = true;
-    map.fitBounds(bounds.pad(0.35), {
-      animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-      duration: 0.55,
-      padding: [42, 42],
-      maxZoom: 13,
-    });
-  }, [fireSpread.data, fireSpread.hour, followSpread, map]);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      map.fitBounds(bounds.pad(0.35), { animate: false, padding: [42, 42], maxZoom: 13 });
+      return;
+    }
+    // flyToBounds gives a smooth, cinematic pan+zoom to the target no matter
+    // how far/zoomed-out the map currently is. Plain fitBounds only animates
+    // for a small zoom delta — for a big jump (e.g. from the global view) it
+    // just snaps the view instantly instead of easing into it.
+    map.flyToBounds(bounds.pad(0.35), { padding: [42, 42], maxZoom: 13, duration: 1.4 });
+  }, [fireSpread.data, followSpread, map]);
   return null;
 }
 
@@ -69,14 +83,6 @@ export function FireRiskMap({ layers, baseMap, initialView = 'site', fires, sele
       <MapContainer center={initialView === 'global' ? [20, 0] : SITE} zoom={initialView === 'global' ? 2 : 12} minZoom={2} zoomControl={false} preferCanvas className="leaflet-map">
         <ZoomControl position="bottomright" />
         <TileLayer key={baseMap} url={tile.url} attribution={tile.attribution} eventHandlers={{ tileerror: () => setTileFailed(true), tileload: () => setTileFailed(false) }} />
-        {layers.fire && <WMSTileLayer
-          url="/api/fires/wms"
-          layers="fires_viirs_noaa20_24,fires_viirs_noaa21_24"
-          format="image/png"
-          transparent
-          version="1.1.1"
-          attribution="NASA FIRMS"
-        />}
         <MapOverlays layers={layers} fires={fires} selectedFireId={selectedFireId} onSelectFire={onSelectFire} fireSpread={fireSpread} />
         <MapController />
         <SpreadAutoFocus fireSpread={fireSpread} followSpread={followSpread} />

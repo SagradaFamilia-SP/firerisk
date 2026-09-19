@@ -76,7 +76,7 @@ describe('useLiveFires', () => {
     expect(apiClient.fires).toHaveBeenCalledTimes(1);
   });
 
-  it('clears old detections while loading a new distant viewport', async () => {
+  it('keeps showing the previous markers while loading a new viewport, no flicker', async () => {
     const americanFire = detection('america-fire', 38.9355, -112.8171);
     const firstResponse = { ...response, detections: [americanFire] };
     let resolveSecond: (value: FireResponse) => void = () => undefined;
@@ -95,10 +95,14 @@ describe('useLiveFires', () => {
     act(() => result.current.updateViewport({ west: -10, south: 35, east: 4, north: 44, zoom: 6 }));
     await act(() => vi.advanceTimersByTimeAsync(350));
 
+    // Panning/zooming to a new viewport must not flash the markers to empty:
+    // the previous batch stays on screen until the new one actually arrives.
     expect(result.current.state.status).toBe('loading');
-    expect(result.current.state.data).toBeNull();
+    expect(result.current.state.data?.detections[0]?.id).toBe('america-fire');
 
     await act(async () => resolveSecond(response));
+    expect(result.current.state.status).toBe('success');
+    expect(result.current.state.data?.detections).toEqual([]);
   });
 
   it('clears the selected fire when panning outside its viewport', async () => {

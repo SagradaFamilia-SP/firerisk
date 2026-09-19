@@ -2,6 +2,7 @@ import { Gauge, MapPin, Satellite, Thermometer, X } from 'lucide-react';
 
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
+import { FIRE_RENDER_LIMIT } from '../map/sampleFires';
 import type { FirmsSource } from '../../types/api';
 
 const sourceLabels: Record<FirmsSource, string> = {
@@ -55,7 +56,7 @@ export function LiveFirePanel({ liveFires, fireSpread }: { liveFires: LiveFires;
         {state.data.meta.stale ? 'Datos en caché · NASA no disponible. ' : ''}
         {state.data.meta.latest_acquisition ? `Última adquisición ${utcDate(state.data.meta.latest_acquisition)} UTC · ` : ''}
         Sincronizado {utcDate(state.data.meta.fetched_at)} UTC
-        {state.data.meta.count > 8000 ? ' · Mapa limitado a las 8.000 observaciones más recientes' : ''}
+        {state.data.meta.count > FIRE_RENDER_LIMIT ? ` · Mapa limitado a una muestra representativa de ${FIRE_RENDER_LIMIT.toLocaleString('es-ES')} observaciones` : ''}
       </p>}
       {state.status === 'error' && <p className="data-error" role="alert">{state.error}</p>}
       {selected && <div className="selected-fire-drawer" role="region" aria-label="Detalle del fuego seleccionado">
@@ -87,6 +88,12 @@ export function LiveFirePanel({ liveFires, fireSpread }: { liveFires: LiveFires;
               <strong>Radio estimado {hour === 0 ? 'ahora' : `a +${hour} h`}</strong>
               <span>Mín {snapshot.radius_km_min.toFixed(2)} km · Medio {snapshot.radius_km_mean.toFixed(2)} km · Máx {snapshot.radius_km_max.toFixed(2)} km</span>
               <span>Área aproximada: {snapshot.area_km2.toFixed(2)} km²</span>
+              <strong>Intensidad del frente (Byram)</strong>
+              <span>
+                {snapshot.intensity_kw_m_max > 0
+                  ? `Mín ${snapshot.intensity_kw_m_min.toFixed(0)} · Medio ${snapshot.intensity_kw_m_mean.toFixed(0)} · Máx ${snapshot.intensity_kw_m_max.toFixed(0)} kW/m`
+                  : 'Sin frente activo todavía'}
+              </span>
               <small>{fireSpread.data.warning}</small>
             </div>
           );

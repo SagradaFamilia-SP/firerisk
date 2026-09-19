@@ -35,12 +35,15 @@ export interface SpreadPoint { lat: number; lon: number }
 
 export interface SpreadSnapshot {
   hour: number; radius_km_min: number; radius_km_max: number; radius_km_mean: number;
-  area_km2: number; polygon: SpreadPoint[];
+  area_km2: number; rings: SpreadPoint[][];
 }
 
 export interface SpreadResponse {
   center: SpreadPoint; max_hours: number; terrain_source: 'open-meteo-dem' | 'flat-fallback';
+  fuel_source: 'esa-worldcover' | 'fallback-grass';
+  ignition_points: SpreadPoint[];
   weather: Array<{ time: string; wind_kmh: number; wind_from_deg: number; temperature_c: number; rh_pct: number }>;
   snapshots: SpreadSnapshot[];
   warning: string;
+  model_notes: string[];
 }

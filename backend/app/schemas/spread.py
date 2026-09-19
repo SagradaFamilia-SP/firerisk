@@ -20,7 +20,7 @@ class SpreadSnapshot(BaseModel):
     radius_km_max: float
     radius_km_mean: float
     area_km2: float
-    polygon: list[SpreadPoint]
+    rings: list[list[SpreadPoint]]
 
 
 class WeatherSample(BaseModel):
@@ -35,6 +35,9 @@ class SpreadResponse(BaseModel):
     center: SpreadPoint
     max_hours: int
     terrain_source: Literal["open-meteo-dem", "flat-fallback"]
+    fuel_source: Literal["esa-worldcover", "fallback-grass"]
+    ignition_points: list[SpreadPoint]
     weather: list[WeatherSample]
     snapshots: list[SpreadSnapshot]
     warning: str
+    model_notes: list[str]

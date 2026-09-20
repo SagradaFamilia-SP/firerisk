@@ -45,8 +45,9 @@ vi.mock('react-leaflet', () => ({
     getPane: () => overlayPane,
     once: vi.fn(),
     getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6,
+    getSize: () => ({ x: 800, y: 600 }),
   }),
-  useMapEvents: () => ({ getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
+  useMapEvents: () => ({ getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6, getSize: () => ({ x: 800, y: 600 }) }),
 }));
 
 describe('FireRiskMap', () => {

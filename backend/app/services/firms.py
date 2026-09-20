@@ -100,6 +100,18 @@ def split_bounds(west: float, south: float, east: float, north: float) -> list[t
     return [(west, south, 180, north), (-180, south, east, north)]
 
 
+def _in_bbox(lat: float, lon: float, west: float, south: float, east: float, north: float) -> bool:
+    if not (south <= lat <= north):
+        return False
+    if west <= east:
+        return west <= lon <= east
+    # Antimeridian-crossing viewport (e.g. west=170, east=-170).
+    return lon >= west or lon <= east
+
+
+MAX_QUERY_HOURS = 72
+
+
 class FirmsService:
     def __init__(
         self,
@@ -112,10 +124,93 @@ class FirmsService:
         self.data_cache = data_cache or TTLCache(settings.firms_data_cache_ttl_seconds)
         self.wms_cache = wms_cache or TTLCache(settings.firms_wms_cache_ttl_seconds)
         self.now = now
+        # Populated by refresh_master(), which a background task (see
+        # app/main.py) runs on a timer independent of any request. Once this
+        # has data, fetch_detections serves every viewport purely by
+        # filtering it in memory — no NASA call and no CSV parse on the
+        # request path at all, which is the whole point: a user opening the
+        # map should never be the one who pays for that round trip.
+        self._master_by_source: dict[FirmsSource, list[FireDetection]] = {}
+        self._master_updated_at: datetime | None = None
+
+    async def refresh_master(self) -> None:
+        """Fetches the full world dataset for every known source and swaps
+        it in atomically. Meant to be called on a timer by a background task,
+        never from the request path."""
+        if not self.settings.nasa_firms_map_key:
+            return
+        day_range = MAX_QUERY_HOURS // 24 + 1
+        sources: list[FirmsSource] = ["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]
+
+        async def fetch_source(client: httpx.AsyncClient, source: FirmsSource) -> tuple[FirmsSource, list[FireDetection]]:
+            response = await client.get(
+                f"{self.settings.firms_base_url}/api/area/csv/"
+                f"{self.settings.nasa_firms_map_key}/{source}/-180,-90,180,90/{day_range}"
+            )
+            response.raise_for_status()
+            detections = await asyncio.to_thread(parse_firms_csv, response.text, source)
+            return source, await asyncio.to_thread(deduplicate_detections, detections)
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            results = await asyncio.gather(
+                *(fetch_source(client, source) for source in sources), return_exceptions=True
+            )
+        for outcome in results:
+            if isinstance(outcome, BaseException):
+                continue
+            source, detections = outcome
+            self._master_by_source[source] = detections
+        if any(not isinstance(outcome, BaseException) for outcome in results):
+            self._master_updated_at = self.now()
 
     async def fetch_detections(self, query: FireQuery) -> FireResponse:
         if not self.settings.nasa_firms_map_key:
             raise FirmsNotConfiguredError("FIRMS no está configurado")
+        if self._master_updated_at is not None:
+            return await self._serve_from_master(query)
+        return await self._fetch_live(query)
+
+    async def _serve_from_master(self, query: FireQuery) -> FireResponse:
+        threshold = self.now() - timedelta(hours=query.hours)
+        minimum = CONFIDENCE_RANK[query.min_confidence]
+        west, south, east, north = query.west, query.south, query.east, query.north
+        wanted = set(query.sources)
+
+        def build() -> list[FireDetection]:
+            candidates = [
+                item
+                for source in wanted
+                for item in self._master_by_source.get(source, [])
+            ]
+            filtered = [
+                item
+                for item in candidates
+                if item.acquired_at >= threshold
+                and CONFIDENCE_RANK[item.confidence] >= minimum
+                and _in_bbox(item.latitude, item.longitude, west, south, east, north)
+            ]
+            return deduplicate_detections(filtered)
+
+        normalized = await asyncio.to_thread(build)
+        age_seconds = (self.now() - self._master_updated_at).total_seconds() if self._master_updated_at else None
+        return FireResponse(
+            detections=normalized,
+            meta=FireMeta(
+                sources=sorted(wanted),
+                requested_hours=query.hours,
+                fetched_at=self._master_updated_at or self.now(),
+                latest_acquisition=normalized[0].acquired_at if normalized else None,
+                count=len(normalized),
+                cache="hit",
+                # Flag as stale once the background refresh has clearly fallen
+                # behind (3x its own interval), rather than on every request.
+                stale=age_seconds is not None and age_seconds > self.settings.firms_refresh_interval_seconds * 3,
+            ),
+        )
+
+    async def _fetch_live(self, query: FireQuery) -> FireResponse:
+        """The original on-demand path: used only before the first background
+        refresh_master() completes (e.g. right after a cold start)."""
         cache_key = self._data_cache_key(query)
         if cached := self.data_cache.get_fresh(cache_key):
             result = cached.model_copy(deep=True)

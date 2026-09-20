@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     firms_base_url: str = "https://firms.modaps.eosdis.nasa.gov"
     firms_data_cache_ttl_seconds: int = 300
     firms_wms_cache_ttl_seconds: int = 900
+    firms_refresh_interval_seconds: int = 120
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"
     nominatim_cache_ttl_seconds: int = 86_400
     nominatim_user_agent: str = "PYROS Wildfire Intelligence demo contact: local-dev"

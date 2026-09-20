@@ -75,6 +75,7 @@ Variables disponibles:
 - `FIRMS_BASE_URL`: origen oficial de FIRMS; normalmente no es necesario cambiarlo.
 - `FIRMS_DATA_CACHE_TTL_SECONDS`: caché de observaciones por viewport, 300 s por defecto.
 - `FIRMS_WMS_CACHE_TTL_SECONDS`: caché de teselas WMS, 900 s por defecto.
+- `FIRMS_REFRESH_INTERVAL_SECONDS`: cada cuánto refresca el servidor, en segundo plano, el dataset mundial de FIRMS (ambos satélites). Las peticiones de usuario (`/api/fires`) filtran ese dataset en memoria — nunca llaman a NASA directamente salvo justo tras arrancar, antes del primer refresco. 120 s por defecto.
 - `SPEECH_API_KEY`: clave de la API de voz de [SLNG](https://slng.ai) (`/v1/bridges/unmute/stt/{modelo}`). Necesaria para el botón de micrófono del chat. Nunca se envía al navegador.
 - `SPEECH_BASE_URL`: origen de la API de voz. Por defecto `https://api.slng.ai`.
 - `SPEECH_MODEL`: modelo de transcripción (proveedor/modelo). Por defecto `deepgram/nova:3`.

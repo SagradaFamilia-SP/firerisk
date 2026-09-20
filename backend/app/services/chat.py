@@ -49,10 +49,49 @@ DEFAULT_REGION = "espana"
 CONFIDENCE_LABELS: dict[str, str] = {"low": "baja", "nominal": "nominal", "high": "alta"}
 MAX_FIRES_RETURNED = 300
 
+HELP_REPLY = (
+    "Puedo darte un informe de incendios activos (NASA FIRMS VIIRS) para España, Portugal, Francia, "
+    "Italia o Grecia. Prueba con algo como:\n\n"
+    "- ¿Qué incendios tengo en España?\n"
+    "- ¿Hay incendios activos en Portugal?\n"
+    "- Incendios en las últimas 72 horas en Grecia\n\n"
+    "Si no indicas país asumo España, y si no indicas ventana de tiempo asumo las últimas 24 horas."
+)
+
+# Small talk never needs a real region/fire lookup, so it's checked before
+# any FIRMS call — otherwise every "hola" silently turned into a full Spain
+# fire report, which reads as the bot ignoring the user entirely.
+_SMALLTALK_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"^(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|ey|que tal|saludos)[\s!.,?]*$"),
+        "¡Hola! Soy el asistente de PYROS. " + HELP_REPLY,
+    ),
+    (
+        re.compile(r"\b(ayuda|que puedes hacer|que sabes hacer|comandos|opciones)\b"),
+        HELP_REPLY,
+    ),
+    (
+        re.compile(r"^(gracias|muchas gracias|genial|perfecto|vale|ok|okay)[\s!.,]*$"),
+        "¡De nada! Si necesitas otro informe de incendios, aquí estoy.",
+    ),
+    (
+        re.compile(r"^(adios|hasta luego|chao|nos vemos)[\s!.,]*$"),
+        "Hasta luego. Vuelve cuando necesites revisar el estado de los incendios.",
+    ),
+]
+
 
 def _normalize(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", text.lower())
     return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def detect_smalltalk_reply(message: str) -> str | None:
+    normalized = _normalize(message).strip()
+    for pattern, reply in _SMALLTALK_PATTERNS:
+        if pattern.search(normalized):
+            return reply
+    return None
 
 
 def detect_region(message: str) -> str:
@@ -155,6 +194,9 @@ def _build_model_messages(
 
 
 async def answer_chat(request: ChatRequest, firms_service: FirmsService, settings: Settings) -> ChatResponse:
+    if smalltalk_reply := detect_smalltalk_reply(request.message):
+        return ChatResponse(reply=smalltalk_reply, fires=[], summary=None)
+
     region_key = detect_region(request.message)
     region_label = REGION_LABELS[region_key]
     hours = detect_hours(request.message)

@@ -65,7 +65,7 @@ export interface ChatSummary {
   generated_at: string; narrative_source: 'model' | 'fallback' | 'unconfigured';
 }
 
-export interface ChatResponse { reply: string; fires: FireDetection[]; summary: ChatSummary }
+export interface ChatResponse { reply: string; fires: FireDetection[]; summary: ChatSummary | null }
 
 export interface CameraFireDetection {
   id: number; latitude: number; longitude: number; confidence: number;

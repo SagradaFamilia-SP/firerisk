@@ -29,4 +29,4 @@ class ChatSummary(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     fires: list[FireDetection]
-    summary: ChatSummary
+    summary: ChatSummary | None = None

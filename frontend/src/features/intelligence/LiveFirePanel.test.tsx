@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FireReport } from '../../hooks/useFireReport';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { LiveFires } from '../../hooks/useLiveFires';
-import type { FireResponse } from '../../types/api';
+import type { FireResponse, SpreadResponse } from '../../types/api';
 import { LiveFirePanel } from './LiveFirePanel';
 
 const idleFireSpread: FireSpread = { status: 'idle', data: null, error: null, hour: 3, setHour: vi.fn() };
@@ -19,6 +19,48 @@ const detection = {
   source: 'VIIRS_NOAA20_NRT' as const, confidence: 'high' as const,
   brightness: 341.2, brightness_ti5: 299.4, frp: 18.7, scan: 0.4, track: 0.5,
   daynight: 'night' as const,
+};
+
+const emptySnapshot = (hour: number) => ({
+  hour, radius_km_min: 0, radius_km_max: 0, radius_km_mean: 0, area_km2: 0, rings: [],
+  intensity_kw_m_min: 0, intensity_kw_m_mean: 0, intensity_kw_m_max: 0, burned_area_by_fuel_km2: {},
+});
+
+const spreadResponse: SpreadResponse = {
+  center: { lat: 39.681, lon: -6.347 },
+  max_hours: 12,
+  terrain_source: 'open-meteo-dem',
+  fuel_source: 'esa-worldcover',
+  ignition_points: [{ lat: 39.681, lon: -6.347 }],
+  weather: [
+    { time: '2026-09-19T14:00:00Z', wind_kmh: 18, wind_from_deg: 220, temperature_c: 31, rh_pct: 22 },
+    { time: '2026-09-19T15:00:00Z', wind_kmh: 24, wind_from_deg: 245, temperature_c: 33, rh_pct: 18 },
+  ],
+  snapshots: [
+    ...Array.from({ length: 12 }, (_, hour) => ({
+      ...emptySnapshot(hour),
+      radius_km_max: hour * 0.1,
+      radius_km_mean: hour * 0.08,
+      area_km2: hour * 0.15,
+      intensity_kw_m_max: hour * 120,
+      intensity_kw_m_mean: hour * 90,
+    })),
+    {
+      hour: 12, radius_km_min: 0.8, radius_km_max: 1.9, radius_km_mean: 1.2, area_km2: 4.4, rings: [],
+      intensity_kw_m_min: 450, intensity_kw_m_mean: 1400, intensity_kw_m_max: 3100,
+      burned_area_by_fuel_km2: { 'Tall grass': 2.7, 'Closed timber litter': 1.7 },
+    },
+  ],
+  warning: 'Simulación experimental.',
+  model_notes: [
+    'ROS calculado con Rothermel y ajustado por viento, pendiente y combustible Anderson.',
+    'La intensidad usa Byram: I = H * w * r.',
+  ],
+  scenario: { frp_mw: 18.7, brightness_k: 341.2, spread_multiplier: 1.34 },
+};
+
+const loadedFireSpread: FireSpread = {
+  status: 'success', data: spreadResponse, error: null, hour: 12, setHour: vi.fn(),
 };
 
 function liveFires(data: FireResponse, selectedFireId: string | null = null, setSelectedFireId = vi.fn()): LiveFires {
@@ -57,6 +99,21 @@ describe('LiveFirePanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar detalle del fuego' }));
     expect(setSelectedFireId).toHaveBeenCalledWith(null);
+  });
+
+  it('opens a propagation statistics modal from the selected fire drawer', () => {
+    render(<LiveFirePanel liveFires={liveFires({ detections: [detection], meta: { ...meta, sources: [...meta.sources] } }, detection.id)} fireSpread={loadedFireSpread} fireReport={idleFireReport} selectedFire={detection} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver estadísticas de propagación' }));
+
+    expect(screen.getByRole('dialog', { name: 'Estadísticas de propagación' })).toBeInTheDocument();
+    expect(screen.getByText('Modelo de propagación')).toBeInTheDocument();
+    expect(screen.getAllByText('4,40 km²').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1,90 km').length).toBeGreaterThan(0);
+    expect(screen.getByText('3100 kW/m')).toBeInTheDocument();
+    expect(screen.getAllByText('1,34x').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Tall grass').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Rothermel/)).toBeInTheDocument();
   });
 
   it('shows the resolved locality and country instead of raw coordinates once reverse geocoding succeeds', () => {

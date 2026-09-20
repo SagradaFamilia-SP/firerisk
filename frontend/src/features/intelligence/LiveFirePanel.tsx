@@ -1,4 +1,5 @@
-import { FileDown, Gauge, Loader2, MapPin, Satellite, Thermometer, X } from 'lucide-react';
+import { useState } from 'react';
+import { FileDown, Gauge, Info, Loader2, MapPin, Satellite, Thermometer, X } from 'lucide-react';
 
 import type { AsyncState } from '../../hooks/useDashboard';
 import type { FireReport } from '../../hooks/useFireReport';
@@ -7,6 +8,7 @@ import type { LiveFires } from '../../hooks/useLiveFires';
 import { FIRE_RENDER_LIMIT } from '../map/sampleFires';
 import { SpreadImpactSummary } from '../map/SpreadImpactSummary';
 import type { FireDetection, FirmsSource, ReverseLocationResponse } from '../../types/api';
+import { SpreadStatsModal } from './SpreadStatsModal';
 
 const NASA_SOURCES: readonly FirmsSource[] = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT'];
 
@@ -27,6 +29,7 @@ export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocati
   const { hour } = fireSpread;
   const { filters, state } = liveFires;
   const selected = selectedFire ?? undefined;
+  const [statsOpen, setStatsOpen] = useState(false);
   const toggleSource = (source: FirmsSource) => {
     const hasSource = filters.sources.includes(source);
     if (hasSource && filters.sources.length === 1) return;
@@ -74,7 +77,18 @@ export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocati
             <span className="eyebrow">Incendio seleccionado</span>
             <strong>{sourceLabels[selected.source]} · {selected.confidence}</strong>
           </div>
-          <button type="button" aria-label="Cerrar detalle del fuego" onClick={() => liveFires.setSelectedFireId(null)}><X size={15} /></button>
+          <div className="selected-fire-drawer__actions">
+            <button
+              type="button"
+              aria-label="Ver estadísticas de propagación"
+              disabled={!fireSpread.data}
+              title={fireSpread.data ? 'Ver estadísticas de propagación' : 'Calculando propagación…'}
+              onClick={() => setStatsOpen(true)}
+            >
+              <Info size={15} />
+            </button>
+            <button type="button" aria-label="Cerrar detalle del fuego" onClick={() => liveFires.setSelectedFireId(null)}><X size={15} /></button>
+          </div>
         </div>
         <dl className="selected-fire-grid">
           <div>
@@ -145,6 +159,7 @@ export function LiveFirePanel({ liveFires, fireSpread, fireReport, reverseLocati
             <SpreadImpactSummary snapshot={fireSpread.data.snapshots[fireSpread.data.max_hours]} />
           </div>
         )}
+        {statsOpen && fireSpread.data && <SpreadStatsModal data={fireSpread.data} onClose={() => setStatsOpen(false)} />}
       </div>}
     </section>
   );

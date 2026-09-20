@@ -109,7 +109,14 @@ def _in_bbox(lat: float, lon: float, west: float, south: float, east: float, nor
     return lon >= west or lon <= east
 
 
-MAX_QUERY_HOURS = 72
+# The master cache only carries this many hours of world data — covering
+# every source for the full MAX_QUERY_HOURS (72h) window would mean fetching
+# and parsing a multi-day, whole-world CSV (hundreds of thousands of rows)
+# on every refresh, which is slow/flaky enough to risk the master cache never
+# finishing a refresh at all. 24h covers the default view every user actually
+# lands on; a query asking for more (48h/72h, the less common "advanced
+# filter" case) falls back to a live per-viewport fetch instead.
+MASTER_CACHE_HOURS = 24
 
 
 class FirmsService:
@@ -139,7 +146,7 @@ class FirmsService:
         never from the request path."""
         if not self.settings.nasa_firms_map_key:
             return
-        day_range = MAX_QUERY_HOURS // 24 + 1
+        day_range = MASTER_CACHE_HOURS // 24 + 1
         sources: list[FirmsSource] = ["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]
 
         async def fetch_source(client: httpx.AsyncClient, source: FirmsSource) -> tuple[FirmsSource, list[FireDetection]]:
@@ -166,7 +173,7 @@ class FirmsService:
     async def fetch_detections(self, query: FireQuery) -> FireResponse:
         if not self.settings.nasa_firms_map_key:
             raise FirmsNotConfiguredError("FIRMS no está configurado")
-        if self._master_updated_at is not None:
+        if self._master_updated_at is not None and query.hours <= MASTER_CACHE_HOURS:
             return await self._serve_from_master(query)
         return await self._fetch_live(query)
 

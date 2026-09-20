@@ -20,10 +20,6 @@ COPY app ./app
 
 RUN pip install -e .
 
-# YOLO weights and any local media are mounted at runtime, not baked into the
-# image — see backend/README.md.
-RUN mkdir -p /app/model
-
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

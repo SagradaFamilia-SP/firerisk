@@ -17,4 +17,6 @@ docs/superpowers
 backend/private.key
 backend/models/
 backend/data/
+/private.key
+/models/
 

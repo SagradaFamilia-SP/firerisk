@@ -4,8 +4,14 @@ services:
     env_file:
       - ./backend/.env
     volumes:
-      # YOLO weights (best.pt) — not baked into the image, see backend/README.md.
-      - ./backend/model:/app/model:ro
+      # YOLO weights — not baked into the image (backend/.env: YOLO_MODEL_PATH=./models/best.pt,
+      # resolved relative to the container's /app WORKDIR). Kept at the repo
+      # root, not inside backend/, so it's easy to swap without touching the
+      # backend tree. See backend/README.md.
+      - ./models:/app/models:ro
+      # Vonage private key — backend/.env: VONAGE_PRIVATE_KEY_PATH=./private.key,
+      # same /app-relative resolution. Also kept at the repo root.
+      - ./private.key:/app/private.key:ro
     ports:
       - "8000:8000"
     # The LLM server (MODEL_BASE_URL) runs on the host, not in this compose

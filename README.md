@@ -103,7 +103,7 @@ docker compose up --build -d
 - Frontend (nginx) queda en `http://<servidor>:80`, proxeando `/api/*` al backend.
 - Backend (FastAPI/uvicorn) queda en `http://<servidor>:8000`.
 - `backend/.env` se monta vía `env_file`; nunca se hornea en la imagen.
-- Los pesos de YOLO (`backend/model/best.pt`) se montan como volumen de solo lectura — no forman parte de la imagen.
+- Los pesos de YOLO (`models/best.pt`) y la clave privada de Vonage (`private.key`) viven en la **raíz del repo** y se montan como volúmenes de solo lectura — no forman parte de la imagen. Ver [backend/README.md](backend/README.md) para el detalle de rutas.
 - El LLM (`MODEL_BASE_URL`) corre en el host, no en compose. Dentro del contenedor `localhost` es el propio contenedor, así que `backend/.env` debe apuntar a `http://host.docker.internal:3000/v1` (puerto donde esté expuesto el modelo). `docker-compose.yml` ya resuelve ese hostname en Linux vía `extra_hosts`; en macOS/Windows con Docker Desktop funciona sin configuración adicional.
 - Antes de exponer el servidor a Internet, pon un reverse proxy con TLS (Caddy/Traefik/nginx) delante de los puertos 80/8000, y actualiza `FRONTEND_ORIGINS` en `backend/.env` con el dominio final.
 
@@ -111,6 +111,58 @@ Para reconstruir tras un `git pull`:
 
 ```bash
 docker compose up --build -d
+```
+
+## Despliegue en servidor sin Docker (pyros.strategicplatform.com)
+
+Configuración lista en `deploy/`: [`deploy/pyros-backend.service`](deploy/pyros-backend.service) (systemd) y [`deploy/pyros.strategicplatform.com.conf`](deploy/pyros.strategicplatform.com.conf) (Apache vhost + SSL con el wildcard de `strategicplatform.com`).
+
+En el servidor:
+
+```bash
+sudo mkdir -p /var/www/pyros && sudo chown $USER:$USER /var/www/pyros
+git clone <repo> /var/www/pyros
+cd /var/www/pyros
+
+# Backend
+python3 -m venv backend/.venv
+backend/.venv/bin/pip install -e "backend[dev]"
+cp backend/.env.example backend/.env   # rellena claves reales + FRONTEND_ORIGINS con el dominio final
+# coloca los pesos de YOLO en ./models/best.pt y la clave de Vonage en ./private.key (raíz del repo)
+
+# Frontend (build estático servido por Apache)
+cd frontend && npm install && npm run build && cd ..
+```
+
+Backend como servicio systemd:
+
+```bash
+sudo cp deploy/pyros-backend.service /etc/systemd/system/
+sudo useradd -r -s /usr/sbin/nologin pyros 2>/dev/null || true
+sudo chown -R pyros:pyros /var/www/pyros
+sudo systemctl daemon-reload
+sudo systemctl enable --now pyros-backend
+sudo systemctl status pyros-backend
+```
+
+Apache + SSL (usa el wildcard cert existente, ajusta las rutas del `.conf` si difieren):
+
+```bash
+sudo a2enmod ssl proxy proxy_http headers rewrite
+sudo cp deploy/pyros.strategicplatform.com.conf /etc/apache2/sites-available/
+sudo a2ensite pyros.strategicplatform.com
+sudo apachectl configtest && sudo systemctl reload apache2
+```
+
+El vhost redirige HTTP→HTTPS, sirve `frontend/dist` como SPA y proxea `/api/*` a `127.0.0.1:8000` (el backend systemd). Actualiza `SSLCertificateFile`/`SSLCertificateKeyFile` en el `.conf` a la ruta real donde esté el wildcard de `strategicplatform.com` si no coincide con la del archivo.
+
+Para desplegar cambios tras un `git pull`:
+
+```bash
+cd /var/www/pyros && git pull
+backend/.venv/bin/pip install -e "backend[dev]"
+sudo systemctl restart pyros-backend
+cd frontend && npm install && npm run build
 ```
 
 ## Calidad

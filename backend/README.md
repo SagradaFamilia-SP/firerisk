@@ -19,12 +19,17 @@ Variables de entorno: ver `.env.example` y la sección "Configuración" del [REA
 docker build -t pyros-backend .
 docker run --rm -p 8000:8000 \
   --env-file .env \
-  -v "$(pwd)/model:/app/model:ro" \
+  -v "$(pwd)/../models:/app/models:ro" \
+  -v "$(pwd)/../private.key:/app/private.key:ro" \
   pyros-backend
 ```
 
-- El contenedor no incluye los pesos de YOLO (`model/best.pt`): móntalos como volumen o define `YOLO_MODEL_PATH` apuntando a otra ruta montada.
+- El contenedor no incluye los pesos de YOLO ni la clave de Vonage: se montan como volúmenes, resueltos contra el `.env` así:
+  - `YOLO_MODEL_PATH=./models/best.pt` → monta `models/best.pt` (en la **raíz del repo**, no dentro de `backend/`) en `/app/models/best.pt`.
+  - `VONAGE_PRIVATE_KEY_PATH=./private.key` → monta `private.key` (también en la raíz del repo) en `/app/private.key`.
+  - Ambas rutas son relativas al `WORKDIR` del contenedor (`/app`), no a dónde vive el archivo en el host.
+  - `private.key` debe existir como **archivo** antes de `docker compose up`; si no existe, Docker crea una carpeta vacía en su lugar y Vonage fallará al leer la clave.
 - `.env` nunca se copia a la imagen (ver `.dockerignore`); pásalo con `--env-file` o `env_file` en compose.
-- La imagen instala `libgdal32`, `libgeos-c1v5`, `libgl1` y `libglib2.0-0`, necesarias para `rasterio` (WMS/mapas) y `opencv`/`ultralytics` (detección por cámara).
+- La imagen instala `libgl1` y `libglib2.0-0` (runtime de `opencv`/`ultralytics` para la detección por cámara); `rasterio` trae su propio GDAL en la wheel, sin dependencias de sistema.
 
-Para levantar backend + frontend juntos, usa el `docker-compose.yml` de la raíz del repo.
+Para levantar backend + frontend juntos, usa el `docker-compose.yml` de la raíz del repo — ya monta `./models` y `./private.key` desde ahí.

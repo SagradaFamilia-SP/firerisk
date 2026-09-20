@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import hashlib
 import io
@@ -123,7 +124,6 @@ class FirmsService:
             return result
 
         try:
-            detections: list[FireDetection] = []
             # FIRMS' `day_range` counts whole calendar days back from "today"
             # in its own processing pipeline, not a rolling N*24h window: the
             # current day's bucket is often still empty right after the UTC
@@ -131,24 +131,47 @@ class FirmsService:
             # Requesting one extra day of raw data absorbs that gap; the exact
             # `hours` cutoff below still trims the result to the real window.
             day_range = query.hours // 24 + 1
+            requests = [
+                (source, bounds)
+                for source in sorted(set(query.sources))
+                for bounds in split_bounds(query.west, query.south, query.east, query.north)
+            ]
+
+            async def fetch_one(client: httpx.AsyncClient, source: FirmsSource, bounds: tuple[float, float, float, float]) -> list[FireDetection]:
+                area = ",".join(f"{value:g}" for value in bounds)
+                response = await client.get(
+                    f"{self.settings.firms_base_url}/api/area/csv/"
+                    f"{self.settings.nasa_firms_map_key}/{source}/{area}/{day_range}"
+                )
+                response.raise_for_status()
+                # A whole-world, multi-day CSV can be tens of thousands of
+                # rows; parsing it is CPU-bound pure Python, so running it
+                # inline would block the event loop (and every other request
+                # this process is serving) for the whole parse. Farming it
+                # out to a thread keeps the server responsive to everything
+                # else while the big requests grind through their own CSV.
+                return await asyncio.to_thread(parse_firms_csv, response.text, source)
+
+            # The bare-metal deploy showed this endpoint as the slow one: with
+            # 2 sources x up to 2 bounds, this loop used to make up to 4 NASA
+            # FIRMS requests back-to-back, each one a multi-second round trip.
+            # Firing them concurrently turns "4 sequential requests" into
+            # "as slow as the single slowest one".
             async with httpx.AsyncClient(timeout=20.0) as client:
-                for source in sorted(set(query.sources)):
-                    for bounds in split_bounds(query.west, query.south, query.east, query.north):
-                        area = ",".join(f"{value:g}" for value in bounds)
-                        response = await client.get(
-                            f"{self.settings.firms_base_url}/api/area/csv/"
-                            f"{self.settings.nasa_firms_map_key}/{source}/{area}/{day_range}"
-                        )
-                        response.raise_for_status()
-                        detections.extend(parse_firms_csv(response.text, source))
+                results = await asyncio.gather(*(fetch_one(client, source, bounds) for source, bounds in requests))
+            detections: list[FireDetection] = [item for batch in results for item in batch]
             threshold = self.now() - timedelta(hours=query.hours)
             minimum = CONFIDENCE_RANK[query.min_confidence]
-            filtered = [
-                item
-                for item in detections
-                if item.acquired_at >= threshold and CONFIDENCE_RANK[item.confidence] >= minimum
-            ]
-            normalized = deduplicate_detections(filtered)
+
+            def filter_and_dedupe() -> list[FireDetection]:
+                filtered = [
+                    item
+                    for item in detections
+                    if item.acquired_at >= threshold and CONFIDENCE_RANK[item.confidence] >= minimum
+                ]
+                return deduplicate_detections(filtered)
+
+            normalized = await asyncio.to_thread(filter_and_dedupe)
             result = FireResponse(
                 detections=normalized,
                 meta=FireMeta(

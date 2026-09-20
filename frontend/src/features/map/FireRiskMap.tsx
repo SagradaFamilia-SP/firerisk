@@ -26,6 +26,28 @@ function MapController() {
   useEffect(() => {
     window.setTimeout(() => map.invalidateSize(), 50);
   }, [map]);
+  // The workspace grid animates its column widths (e.g. the intelligence
+  // panel opening/closing) via CSS transition, but Leaflet only repaints
+  // tiles for the container size it knows about — without this it leaves a
+  // blank/black gap until the next manual interaction. ResizeObserver keeps
+  // calling invalidateSize for every frame of that transition so the map
+  // fills back in as the panel collapses.
+  //
+  // `animate: true` here would give invalidateSize its own pan animation —
+  // which, when a fire selection opens the panel at the same time as
+  // SelectionAutoCenter's flyTo, fights that flyTo for control of the
+  // camera. The two competing animations is exactly what looked like "the
+  // zoom outrunning the point" with the propagation overlay flashing across
+  // the screen. Resizing without animating keeps the map correctly sized
+  // without ever touching the camera itself, so it can't collide with flyTo.
+  useEffect(() => {
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false, pan: false });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [map]);
   return null;
 }
 

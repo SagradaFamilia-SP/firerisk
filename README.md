@@ -91,6 +91,27 @@ La clave entregada por NASA debe guardarse únicamente en `backend/.env`, que es
 
 Si el modelo no responde o devuelve contenido inválido, `/api/agent-plan` entrega automáticamente un plan determinista de contingencia.
 
+## Despliegue con Docker
+
+Cada app tiene su propio `Dockerfile` (ver [backend/README.md](backend/README.md) y [frontend/README.md](frontend/README.md) para el detalle), y hay un `docker-compose.yml` en la raíz para levantar ambas juntas:
+
+```bash
+cp backend/.env.example backend/.env   # rellena las claves de producción
+docker compose up --build -d
+```
+
+- Frontend (nginx) queda en `http://<servidor>:80`, proxeando `/api/*` al backend.
+- Backend (FastAPI/uvicorn) queda en `http://<servidor>:8000`.
+- `backend/.env` se monta vía `env_file`; nunca se hornea en la imagen.
+- Los pesos de YOLO (`backend/model/best.pt`) se montan como volumen de solo lectura — no forman parte de la imagen.
+- Antes de exponer el servidor a Internet, pon un reverse proxy con TLS (Caddy/Traefik/nginx) delante de los puertos 80/8000, y actualiza `FRONTEND_ORIGINS` en `backend/.env` con el dominio final.
+
+Para reconstruir tras un `git pull`:
+
+```bash
+docker compose up --build -d
+```
+
 ## Calidad
 
 ```bash

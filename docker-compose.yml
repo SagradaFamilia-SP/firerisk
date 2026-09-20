@@ -1,0 +1,21 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    volumes:
+      # YOLO weights (best.pt) — not baked into the image, see backend/README.md.
+      - ./backend/model:/app/model:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    environment:
+      - API_PROXY_PASS=http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped

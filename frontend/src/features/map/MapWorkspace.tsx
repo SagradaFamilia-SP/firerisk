@@ -23,9 +23,14 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread, cameraFires }: 
   const hasSelectedFire = Boolean(liveFires.selectedFireId);
   const selectedCameraFire = cameraFires.fires.find((fire) => cameraDetectionId(fire.id) === liveFires.selectedFireId) ?? null;
   const sampledFires = sampleFiresForRender(liveFires.state.data?.detections ?? []);
+  const activeFireCount = (liveFires.state.data?.detections.length ?? 0) + cameraFires.fires.length;
 
   return (
     <div className="map-workspace">
+      <div className="map-total-fires">
+        <strong>{activeFireCount.toLocaleString('es-ES')}</strong>
+        <span>incendios activos</span>
+      </div>
       <FireRiskMap
         key={`${view}-${centerKey}`}
         layers={dashboard.layers}

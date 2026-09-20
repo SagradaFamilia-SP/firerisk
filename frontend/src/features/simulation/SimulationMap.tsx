@@ -9,6 +9,18 @@ function MapController() {
   useEffect(() => {
     window.setTimeout(() => map.invalidateSize(), 50);
   }, [map]);
+  // Keeps the map correctly sized through any container resize (e.g. a
+  // panel opening) without animating — see FireRiskMap.tsx's MapController
+  // for why `animate: false` matters (it would otherwise fight a concurrent
+  // flyTo for control of the camera).
+  useEffect(() => {
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false, pan: false });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [map]);
   return null;
 }
 
@@ -21,6 +33,19 @@ function FocusOnPoint({ point }: { point: { lat: number; lon: number } | null })
   const map = useMap();
   useEffect(() => {
     if (!point) return;
+    // Same fix as the main map's SelectionAutoCenter: the shared canvas
+    // renderer (preferCanvas) only reprojects its content at discrete
+    // checkpoints, not every frame of a flyTo — mid-flight it just CSS-
+    // scales the last painted frame, which for a wide starting view (many
+    // fire dots) balloons into a solid-color blob covering the screen until
+    // the flight ends. Fading the overlay pane out for the flight avoids
+    // ever showing that stretched frame.
+    const pane = map.getPane('overlayPane');
+    if (pane) {
+      pane.style.transition = 'opacity 200ms ease';
+      pane.style.opacity = '0';
+      map.once('moveend', () => { pane.style.opacity = '1'; });
+    }
     map.flyTo([point.lat, point.lon], Math.max(map.getZoom(), 11), { duration: 1.1 });
   }, [point, map]);
   return null;

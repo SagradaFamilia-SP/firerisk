@@ -120,6 +120,20 @@ function SelectionAutoCenter({ fires, selectedFireId, suppressUntilRef }: {
         map.setView(target, SELECTION_ZOOM, { animate: false });
         return;
       }
+      // A long flyTo (e.g. from the whole-world view down to a single site)
+      // pans/zooms over several seconds. Leaflet's renderer panes don't
+      // reproject their content on every frame of that flight — they just
+      // CSS-scale whatever was last painted, which for a canvas full of
+      // thousands of overlapping fire dots means a solid-color blob gets
+      // stretched to fill the entire screen until the flight ends and the
+      // real repaint happens. Fading the overlay pane out for the flight and
+      // back in once it lands avoids ever showing that stretched frame.
+      const pane = map.getPane('overlayPane');
+      if (pane) {
+        pane.style.transition = 'opacity 200ms ease';
+        pane.style.opacity = '0';
+        map.once('moveend', () => { pane.style.opacity = '1'; });
+      }
       map.flyTo(target, SELECTION_ZOOM, { duration: 1.3 });
     }, 260);
     return () => window.clearTimeout(timer);

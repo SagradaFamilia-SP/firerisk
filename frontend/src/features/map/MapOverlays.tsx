@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { svg } from 'leaflet';
 import { CircleMarker, LayerGroup, Polygon, Tooltip } from 'react-leaflet';
 
 import type { LayerKey } from '../../hooks/useDashboard';
@@ -12,6 +14,15 @@ export function MapOverlays({ layers, fires, cameraFires, selectedFireId, onSele
   onSelectFire: (id: string | null) => void;
   fireSpread: FireSpread;
 }) {
+  // The map's shared canvas renderer (`preferCanvas`, for the tens of
+  // thousands of fire dots) only repaints its raster at discrete checkpoints
+  // — mid-flyTo it just CSS-scales the last painted frame to match the
+  // in-progress zoom. For a small polygon like the propagation ring, that
+  // makes it visibly balloon past its real size for the length of the
+  // animation. SVG paths instead redraw as real vectors on every frame, so
+  // giving this one layer its own SVG renderer keeps it geometrically
+  // correct throughout the camera flight instead of only after it settles.
+  const spreadRenderer = useMemo(() => svg(), []);
   const fireHour = fireSpread.data ? Math.min(fireSpread.hour, fireSpread.data.max_hours) : 0;
   const fireSnapshot = fireSpread.data?.snapshots[fireHour] ?? null;
   const fireRings: [number, number][][] = (fireSnapshot?.rings ?? [])
@@ -20,7 +31,7 @@ export function MapOverlays({ layers, fires, cameraFires, selectedFireId, onSele
   return (
     <>
       <FireCanvasLayer fires={fires} selectedFireId={selectedFireId} onSelectFire={onSelectFire} visible={layers.fire} />
-      {layers.spread && fireRings.length > 0 && <LayerGroup>{fireRings.map((ring, index) => <Polygon key={index} positions={ring} pathOptions={{ color: '#ff2d1f', weight: 2.5, fillColor: '#ff5a3d', fillOpacity: 0.28 }}>
+      {layers.spread && fireRings.length > 0 && <LayerGroup>{fireRings.map((ring, index) => <Polygon key={index} positions={ring} renderer={spreadRenderer} pathOptions={{ color: '#ff2d1f', weight: 2.5, fillColor: '#ff5a3d', fillOpacity: 0.28 }}>
         <Tooltip>Propagación real (rejilla) · +{fireHour} h · radio máx {fireSnapshot?.radius_km_max.toFixed(2)} km</Tooltip>
       </Polygon>)}</LayerGroup>}
       {layers.camera && <LayerGroup>{cameraFires.map((fire) => {

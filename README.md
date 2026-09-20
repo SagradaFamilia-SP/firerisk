@@ -68,7 +68,7 @@ cp backend/.env.example backend/.env
 
 Variables disponibles:
 
-- `MODEL_BASE_URL`: endpoint OpenAI-compatible. Por defecto `http://localhost:30000/v1`.
+- `MODEL_BASE_URL`: endpoint OpenAI-compatible. En local `http://localhost:30000/v1`; en Docker usa `http://host.docker.internal:<puerto>/v1` para llegar al LLM que corre en el host (ver "Despliegue con Docker").
 - `MODEL_ID`: identificador del modelo servido.
 - `FRONTEND_ORIGINS`: orígenes CORS separados por comas.
 - `NASA_FIRMS_MAP_KEY`: clave privada de NASA FIRMS. Nunca se envía al navegador.
@@ -104,6 +104,7 @@ docker compose up --build -d
 - Backend (FastAPI/uvicorn) queda en `http://<servidor>:8000`.
 - `backend/.env` se monta vía `env_file`; nunca se hornea en la imagen.
 - Los pesos de YOLO (`backend/model/best.pt`) se montan como volumen de solo lectura — no forman parte de la imagen.
+- El LLM (`MODEL_BASE_URL`) corre en el host, no en compose. Dentro del contenedor `localhost` es el propio contenedor, así que `backend/.env` debe apuntar a `http://host.docker.internal:3000/v1` (puerto donde esté expuesto el modelo). `docker-compose.yml` ya resuelve ese hostname en Linux vía `extra_hosts`; en macOS/Windows con Docker Desktop funciona sin configuración adicional.
 - Antes de exponer el servidor a Internet, pon un reverse proxy con TLS (Caddy/Traefik/nginx) delante de los puertos 80/8000, y actualiza `FRONTEND_ORIGINS` en `backend/.env` con el dominio final.
 
 Para reconstruir tras un `git pull`:

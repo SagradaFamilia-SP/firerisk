@@ -16,6 +16,10 @@ const fitBounds = vi.fn();
 const flyToBounds = vi.fn();
 const flyTo = vi.fn();
 const setView = vi.fn();
+const mapContainer = document.createElement('div');
+const overlayPane = document.createElement('div');
+const observe = vi.fn();
+const disconnect = vi.fn();
 
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -37,6 +41,9 @@ vi.mock('react-leaflet', () => ({
     // FireCanvasLayer manages its markers via raw Leaflet layer objects
     // (layerGroup().addTo(map)/.remove()), which call these on the map.
     addLayer: vi.fn(), removeLayer: vi.fn(), hasLayer: () => false,
+    getContainer: () => mapContainer,
+    getPane: () => overlayPane,
+    once: vi.fn(),
     getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6,
   }),
   useMapEvents: () => ({ getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
@@ -48,7 +55,10 @@ describe('FireRiskMap', () => {
     flyToBounds.mockClear();
     flyTo.mockClear();
     setView.mockClear();
+    observe.mockClear();
+    disconnect.mockClear();
     window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+    globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({ observe, disconnect }));
   });
 
   it('contains tile failure without hiding map controls', () => {

@@ -62,6 +62,14 @@ function ViewportObserver({ onViewport, suppressUntilRef }: {
     // fire was just selected, and deselects it a moment before the real
     // fly-to even starts. Skip viewport updates during that short window.
     if (Date.now() < suppressUntilRef.current) return;
+    // While a non-map module (e.g. Tabla de incendios) is active, this
+    // container sits at `display: none` — zero pixel size. Leaflet still
+    // answers getBounds() then, but collapses every edge onto the map's
+    // center, so west===east and south===north: a degenerate, zero-area
+    // viewport the backend correctly rejects with 422. Skip emitting
+    // anything while the map isn't actually visible.
+    const size = map.getSize();
+    if (size.x === 0 || size.y === 0) return;
     const bounds = map.getBounds();
     onViewport({
       west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(),

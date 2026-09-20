@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import ORJSONResponse
 
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -42,6 +44,12 @@ def create_app() -> FastAPI:
         description="Wildfire intelligence and operational planning API",
         version="1.0.0",
         lifespan=lifespan,
+        # orjson serializes a large list of Pydantic models (e.g. tens of
+        # thousands of fire detections for a world view) far faster than
+        # FastAPI's default json+jsonable_encoder path, which was a real
+        # chunk of the /api/fires response time even once the data itself
+        # came straight from the in-memory master cache.
+        default_response_class=ORJSONResponse,
     )
     application.add_middleware(
         CORSMiddleware,
@@ -50,6 +58,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Shrinks a large /api/fires payload well before it hits the network —
+    # matters more here than usual since Apache's reverse proxy in front of
+    # this doesn't compress on its own.
+    application.add_middleware(GZipMiddleware, minimum_size=1000)
     application.include_router(api_router, prefix="/api")
     return application
 

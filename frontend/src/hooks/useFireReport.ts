@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AsyncState } from './useDashboard';
 import type { FireSpread } from './useFireSpread';
 import type { FireDetection, ReverseLocationResponse } from '../types/api';
+import { buildSpreadStats } from '../features/intelligence/spreadStats';
 
 export type ReportStatus = 'idle' | 'collecting' | 'generating' | 'ready' | 'error';
 
@@ -20,6 +21,15 @@ const ORANGE_BRIGHT: [number, number, number] = [224, 78, 34];
 const MUTED: [number, number, number] = [130, 130, 130];
 const TEXT: [number, number, number] = [40, 40, 40];
 const HAIRLINE: [number, number, number] = [225, 225, 225];
+
+export const REPORT_LAYOUT = {
+  fieldStep: 44,
+  rowStep: 22,
+  statStep: 58,
+  sectionGapAfter: 28,
+  blockGap: 14,
+  paragraphGap: 12,
+} as const;
 
 function drawMark(doc: jsPDF, cx: number, cy: number, r: number) {
   doc.setDrawColor(...ORANGE_BRIGHT);
@@ -60,6 +70,74 @@ function drawFooterCaption(doc: jsPDF, pageWidth: number, pageHeight: number, te
   doc.text(text, pageWidth / 2, pageHeight - 24, { align: 'center' });
 }
 
+function drawLineChart(
+  doc: jsPDF,
+  title: string,
+  values: number[],
+  unit: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const max = Math.max(...values, 0.001);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...INK);
+  doc.text(title.toUpperCase(), x, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...MUTED);
+  doc.text(`${values[values.length - 1]?.toFixed(2) ?? '0.00'} ${unit}`, x + width, y, { align: 'right' });
+
+  const chartY = y + 12;
+  doc.setDrawColor(...HAIRLINE);
+  doc.setLineWidth(0.6);
+  doc.line(x, chartY + height, x + width, chartY + height);
+  doc.line(x, chartY, x, chartY + height);
+
+  if (values.length > 0) {
+    doc.setDrawColor(...ORANGE_BRIGHT);
+    doc.setLineWidth(1.4);
+    values.forEach((value, index) => {
+      const px = values.length === 1 ? x + width : x + (index / (values.length - 1)) * width;
+      const py = chartY + height - (value / max) * height;
+      if (index > 0) {
+        const previous = values[index - 1];
+        const prevX = x + ((index - 1) / (values.length - 1)) * width;
+        const prevY = chartY + height - (previous / max) * height;
+        doc.line(prevX, prevY, px, py);
+      }
+      doc.setFillColor(...ORANGE_BRIGHT);
+      doc.circle(px, py, 1.4, 'F');
+    });
+  }
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.8);
+  doc.setTextColor(...MUTED);
+  doc.text('0 h', x, chartY + height + 10);
+  doc.text(`+${values.length - 1} h`, x + width, chartY + height + 10, { align: 'right' });
+}
+
+function drawSimpleRows(doc: jsPDF, rows: Array<[string, string]>, x: number, startY: number, width: number): number {
+  let y = startY;
+  rows.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.3);
+    doc.setTextColor(...MUTED);
+    doc.text(label, x, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...TEXT);
+    doc.text(value, x + width, y, { align: 'right' });
+    doc.setDrawColor(...HAIRLINE);
+    doc.setLineWidth(0.4);
+    doc.line(x, y + 7, x + width, y + 7);
+    y += REPORT_LAYOUT.rowStep;
+  });
+  return y;
+}
+
 function buildReportPdf(
   fire: FireDetection,
   reverseLocation: AsyncState<ReverseLocationResponse>,
@@ -68,9 +146,9 @@ function buildReportPdf(
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 44;
+  const marginX = 48;
   const contentWidth = pageWidth - marginX * 2;
-  const colGap = 28;
+  const colGap = 34;
   const colWidth = (contentWidth - colGap) / 2;
   const rightColX = marginX + colWidth + colGap;
   const generatedAt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'long', timeStyle: 'medium' }).format(new Date());
@@ -92,8 +170,8 @@ function buildReportPdf(
     doc.text(wrapped[0] ?? '—', x, y + 15);
     doc.setDrawColor(...HAIRLINE);
     doc.setLineWidth(0.5);
-    doc.line(x, y + 22, x + width, y + 22);
-    y += 22 + 16;
+    doc.line(x, y + 25, x + width, y + 25);
+    y += REPORT_LAYOUT.fieldStep;
   };
 
   // A large stat callout for the one number that matters most on the page —
@@ -114,18 +192,21 @@ function buildReportPdf(
     doc.text(unit, x + valueWidth + 5, y + 24);
     doc.setDrawColor(...HAIRLINE);
     doc.setLineWidth(0.5);
-    doc.line(x, y + 32, x + width, y + 32);
-    y += 32 + 16;
+    doc.line(x, y + 36, x + width, y + 36);
+    y += REPORT_LAYOUT.statStep;
   };
 
   const sectionHeader = (title: string, x: number) => {
+    doc.setDrawColor(...HAIRLINE);
+    doc.setLineWidth(0.5);
+    doc.line(x, y - 14, x === marginX ? x + contentWidth : x + colWidth, y - 14);
     doc.setFillColor(...ORANGE_BRIGHT);
-    doc.rect(x, y - 9, 16, 2.4, 'F');
+    doc.rect(x, y - 10, 18, 2.6, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11.5);
     doc.setTextColor(...INK);
-    doc.text(title.toUpperCase(), x + 23, y);
-    y += 22;
+    doc.text(title.toUpperCase(), x + 25, y);
+    y += REPORT_LAYOUT.sectionGapAfter;
   };
 
   const paragraph = (text: string, x: number, width: number, size = 9.5) => {
@@ -134,13 +215,13 @@ function buildReportPdf(
     doc.setTextColor(...TEXT);
     const wrapped = doc.splitTextToSize(text, width) as string[];
     doc.text(wrapped, x, y);
-    y += wrapped.length * (size + 3) + 6;
+    y += wrapped.length * (size + 4) + REPORT_LAYOUT.paragraphGap;
   };
 
   // Ubicación / coordenadas span the full width.
   field('Ubicación', reverseLocation.status === 'success' ? reverseLocation.data.label : 'Ubicación no disponible', marginX, contentWidth);
   field('Coordenadas', `${fire.latitude.toFixed(5)}, ${fire.longitude.toFixed(5)}`, marginX, contentWidth);
-  y += 4;
+  y += REPORT_LAYOUT.blockGap;
 
   // Executive summary — the interpretive value-add a raw data dump doesn't give.
   const frpLevel = fire.frp === null ? null : fire.frp >= 50 ? 'muy alta' : fire.frp >= 15 ? 'alta' : fire.frp >= 5 ? 'moderada' : 'baja';
@@ -153,7 +234,7 @@ function buildReportPdf(
       'por lo que su intensidad térmica no puede caracterizarse a partir de este parámetro.';
   sectionHeader('Resumen ejecutivo', marginX);
   paragraph(summary, marginX, contentWidth);
-  y += 4;
+  y += REPORT_LAYOUT.blockGap;
 
   const afterLocationY = y;
   let leftY = afterLocationY;
@@ -207,7 +288,7 @@ function buildReportPdf(
     rightY = y;
   }
 
-  drawFooterCaption(doc, pageWidth, pageHeight, 'PYROS · Informe operativo de incendio — página 1 / 2');
+  drawFooterCaption(doc, pageWidth, pageHeight, 'PYROS · Informe operativo de incendio — página 1 / 3');
 
   // Page 2 — propagation simulation.
   doc.addPage();
@@ -216,6 +297,7 @@ function buildReportPdf(
 
   if (fireSpread.data) {
     const snapshot = fireSpread.data.snapshots[Math.min(fireSpread.hour, fireSpread.data.max_hours)];
+    const stats = buildSpreadStats(fireSpread.data);
 
     const spreadTrend = snapshot.radius_km_max > 0
       ? `A +${fireSpread.hour} h, el modelo proyecta un frente de hasta ${snapshot.radius_km_max.toFixed(2)} km de radio y ` +
@@ -226,29 +308,32 @@ function buildReportPdf(
 
     sectionHeader('Evaluación de la simulación', marginX);
     paragraph(spreadTrend, marginX, contentWidth);
-    y += 4;
+    y += REPORT_LAYOUT.blockGap;
+
+    sectionHeader('Evolución temporal 0-12 h', marginX);
+    const chartWidth = (contentWidth - 20) / 3;
+    drawLineChart(doc, 'Área', stats.series.areaKm2, 'km²', marginX, y, chartWidth, 54);
+    drawLineChart(doc, 'Radio máx.', stats.series.radiusMaxKm, 'km', marginX + chartWidth + 10, y, chartWidth, 54);
+    drawLineChart(doc, 'Intensidad', stats.series.intensityMaxKwM, 'kW/m', marginX + (chartWidth + 10) * 2, y, chartWidth, 54);
+    y += 94;
 
     leftY = y;
     rightY = y;
 
     y = leftY;
-    sectionHeader('Parámetros del terreno', marginX);
+    sectionHeader('Hitos operativos', marginX);
     leftY = y;
     y = rightY;
     sectionHeader('Resultados del modelo', rightColX);
     rightY = y;
 
     y = leftY;
-    field('Terreno / combustible', `${fireSpread.data.terrain_source} · ${fireSpread.data.fuel_source}`, marginX, colWidth);
-    leftY = y;
-
-    const weather = fireSpread.data.weather[0];
-    if (weather) {
-      field('Viento', `${weather.wind_kmh.toFixed(1)} km/h desde ${weather.wind_from_deg.toFixed(0)}°`, marginX, colWidth);
-      leftY = y;
-      field('Temperatura / humedad relativa', `${weather.temperature_c.toFixed(1)} °C · ${weather.rh_pct.toFixed(0)} %`, marginX, colWidth);
-      leftY = y;
-    }
+    leftY = drawSimpleRows(doc, [
+      ['Primera superficie > 1 km²', stats.milestones.firstAreaOverOneKm2 ? `+${stats.milestones.firstAreaOverOneKm2.hour} h` : 'N/D'],
+      ['Pico de intensidad', `+${stats.milestones.peakIntensity.hour} h · ${stats.milestones.peakIntensity.intensity_kw_m_max.toFixed(0)} kW/m`],
+      ['Mayor crecimiento horario', `+${stats.milestones.fastestGrowth.hour} h · ${stats.milestones.fastestGrowth.areaGrowthKm2.toFixed(2)} km²/h`],
+      ['Viento máximo', stats.weather.maxWind ? `${stats.weather.maxWind.wind_kmh.toFixed(1)} km/h desde ${stats.weather.maxWind.wind_from_deg.toFixed(0)}°` : 'N/D'],
+    ], marginX, y, colWidth);
 
     y = rightY;
     stat('Área aproximada', snapshot.area_km2.toFixed(2), 'km²', rightColX, colWidth);
@@ -268,11 +353,47 @@ function buildReportPdf(
     );
     rightY = y;
 
-    y = Math.max(leftY, rightY) + 4;
+    y = Math.max(leftY, rightY) + REPORT_LAYOUT.blockGap;
+    leftY = y;
+    rightY = y;
+
+    y = leftY;
+    sectionHeader('Meteorología y escenario', marginX);
+    leftY = y;
+    leftY = drawSimpleRows(doc, [
+      ['Terreno / combustible', `${fireSpread.data.terrain_source} · ${fireSpread.data.fuel_source}`],
+      ['Multiplicador de propagación', `${fireSpread.data.scenario.spread_multiplier.toFixed(2)}x`],
+      ['FRP / brillo usados', `${fireSpread.data.scenario.frp_mw.toFixed(1)} MW · ${fireSpread.data.scenario.brightness_k.toFixed(1)} K`],
+    ], marginX, y, colWidth);
+
+    y = rightY;
+    sectionHeader('Combustible afectado +12 h', rightColX);
+    rightY = y;
+    rightY = drawSimpleRows(
+      doc,
+      (stats.fuelBreakdown.length > 0 ? stats.fuelBreakdown.slice(0, 5) : [['Sin superficie quemada', 0] as [string, number]])
+        .map(([name, km2]) => [name, `${km2.toFixed(2)} km²`]),
+      rightColX,
+      y,
+      colWidth,
+    );
+
+    y = Math.max(leftY, rightY) + REPORT_LAYOUT.blockGap;
+    const weather = fireSpread.data.weather[0];
+    if (weather) {
+      sectionHeader('Condición inicial del tiempo', marginX);
+      paragraph(`Viento ${weather.wind_kmh.toFixed(1)} km/h desde ${weather.wind_from_deg.toFixed(0)}° · ${weather.temperature_c.toFixed(1)} °C · ${weather.rh_pct.toFixed(0)} % HR.`, marginX, contentWidth, 8.8);
+    }
   } else {
     sectionHeader('Simulación de propagación', marginX);
     paragraph('Simulación no disponible para esta detección.', marginX, contentWidth);
   }
+
+  drawFooterCaption(doc, pageWidth, pageHeight, 'PYROS · Informe operativo de incendio — página 2 / 3');
+
+  doc.addPage();
+  drawHeaderBand(doc, pageWidth, 'Metodología del modelo', 'ROS · Rothermel · Byram');
+  y = 70 + 44;
 
   sectionHeader('Metodología y limitaciones', marginX);
   paragraph(
@@ -290,8 +411,13 @@ function buildReportPdf(
     'satelitales; la propagación mostrada es una simulación y no sustituye información oficial ni protocolos de emergencias.',
     marginX, contentWidth, 8.5,
   );
+  if (fireSpread.data?.model_notes.length) {
+    y += 4;
+    sectionHeader('Notas del cálculo', marginX);
+    fireSpread.data.model_notes.forEach((note) => paragraph(`• ${note}`, marginX, contentWidth, 8.3));
+  }
 
-  drawFooterCaption(doc, pageWidth, pageHeight, 'PYROS · Informe operativo de incendio — página 2 / 2');
+  drawFooterCaption(doc, pageWidth, pageHeight, 'PYROS · Informe operativo de incendio — página 3 / 3');
 
   return doc.output('blob');
 }

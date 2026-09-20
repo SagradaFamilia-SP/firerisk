@@ -2,13 +2,15 @@ import { Video, X } from 'lucide-react';
 
 import { apiUrl } from '../../services/api';
 
-export function VonageYoloStreamButton({ open, onOpen, onClose, recordingUrl }: {
+export function VonageYoloStreamButton({ open, onOpen, onClose, recordingUrl, liveStreamUrl }: {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
   recordingUrl?: string | null;
+  liveStreamUrl?: string;
 }) {
   const hasRecording = Boolean(recordingUrl);
+  const streamUrl = liveStreamUrl ?? '/video/camera';
   return (
     <>
       <button
@@ -35,11 +37,13 @@ export function VonageYoloStreamButton({ open, onOpen, onClose, recordingUrl }: 
             </header>
 
             {recordingUrl ? (
-              <video controls autoPlay src={apiUrl(recordingUrl)} />
+              <video controls autoPlay playsInline preload="metadata">
+                <source src={apiUrl(recordingUrl)} />
+              </video>
             ) : (
               <iframe
                 title="Vonage YOLO real time camera"
-                src={apiUrl('/video/camera')}
+                src={apiUrl(streamUrl)}
                 allow="autoplay; camera"
               />
             )}

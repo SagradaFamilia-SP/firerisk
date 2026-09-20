@@ -22,6 +22,9 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread, cameraFires }: 
   const [streamOpen, setStreamOpen] = useState(false);
   const hasSelectedFire = Boolean(liveFires.selectedFireId);
   const selectedCameraFire = cameraFires.fires.find((fire) => cameraDetectionId(fire.id) === liveFires.selectedFireId) ?? null;
+  const selectedCameraLiveStreamUrl = selectedCameraFire
+    ? `/video/camera-live?lat=${selectedCameraFire.latitude}&lon=${selectedCameraFire.longitude}`
+    : undefined;
   const sampledFires = sampleFiresForRender(liveFires.state.data?.detections ?? []);
   const activeFireCount = (liveFires.state.data?.detections.length ?? 0) + cameraFires.fires.length;
   const countIsLoading = liveFires.state.data === null && (liveFires.state.status === 'loading' || liveFires.state.status === 'idle');
@@ -63,6 +66,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread, cameraFires }: 
           onOpen={() => setStreamOpen(true)}
           onClose={() => setStreamOpen(false)}
           recordingUrl={selectedCameraFire?.recording_url ?? null}
+          liveStreamUrl={selectedCameraLiveStreamUrl}
         />
       )}
       {fireSpread.data && <ForecastTimeline hour={fireSpread.hour} onChange={fireSpread.setHour} onPlayingChange={setTimelinePlaying} />}

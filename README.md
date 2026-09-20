@@ -102,4 +102,4 @@ make check   # todas las comprobaciones
 
 El mapa utiliza NASA FIRMS, teselas remotas de Esri y OpenStreetMap. La meteorología real se consulta a Open-Meteo, por lo que estas funciones requieren conexión a Internet.
 
-> PYROS es una demo de apoyo visual para una hackathon. La propagación mostrada es una simulación y no sustituye información oficial ni protocolos de emergencias.
+

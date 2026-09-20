@@ -32,7 +32,13 @@ vi.mock('react-leaflet', () => ({
   Popup: ({ children }: { children: ReactNode }) => <>{children}</>,
   Rectangle: () => null,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  useMap: () => ({ flyTo, setView, fitBounds, flyToBounds, invalidateSize: vi.fn(), getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
+  useMap: () => ({
+    flyTo, setView, fitBounds, flyToBounds, invalidateSize: vi.fn(),
+    // FireCanvasLayer manages its markers via raw Leaflet layer objects
+    // (layerGroup().addTo(map)/.remove()), which call these on the map.
+    addLayer: vi.fn(), removeLayer: vi.fn(), hasLayer: () => false,
+    getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6,
+  }),
   useMapEvents: () => ({ getBounds: () => ({ getWest: () => -7, getSouth: () => 39, getEast: () => -5, getNorth: () => 41 }), getZoom: () => 6 }),
 }));
 

@@ -93,6 +93,44 @@ async def test_expired_query_uses_real_stale_data_on_timeout() -> None:
     assert route.call_count == 2
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_requests_one_extra_day_beyond_the_rolling_window() -> None:
+    # FIRMS' `day_range` counts whole calendar days in its own pipeline, not a
+    # rolling N*24h window — the current day's bucket can still be empty right
+    # after the UTC day boundary. Requesting `hours // 24 + 1` days absorbs
+    # that gap; this only checks the *request* shape (see the next test for
+    # proof the final results still respect the real `hours` cutoff).
+    route = respx.get(url__regex=r"https://firms\.example/api/area/csv/.+").mock(
+        return_value=Response(200, text=NOAA20_CSV)
+    )
+    service = _service()
+    await service.fetch_detections(FireQuery(west=-10, south=35, east=5, north=45, hours=24))
+    assert route.calls.last.request.url.path.endswith("/2")
+
+    route.calls.reset()
+    await service.fetch_detections(FireQuery(west=-9, south=34, east=6, north=46, hours=72))
+    assert route.calls.last.request.url.path.endswith("/4")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_still_trims_results_to_the_real_requested_window_despite_the_wider_fetch() -> None:
+    # NOAA20_CSV's one row is from 2026-09-19T14:42Z; `_service()`'s clock is
+    # fixed at 2026-09-19T15:00Z, so it's well inside a 24h window — proving
+    # the extra day of raw data fetched above doesn't leak in anything older
+    # than what the caller actually asked for.
+    respx.get(url__regex=r"https://firms\.example/api/area/csv/.+").mock(
+        return_value=Response(200, text=NOAA20_CSV)
+    )
+    service = _service()
+    result = await service.fetch_detections(
+        FireQuery(west=-10, south=35, east=5, north=45, hours=24, sources=["VIIRS_NOAA20_NRT"])
+    )
+    assert result.meta.count == 1
+    assert result.detections[0].acquired_at.isoformat() == "2026-09-19T14:42:00+00:00"
+
+
 def _service(cache: TTLCache | None = None) -> FirmsService:
     settings = Settings(
         nasa_firms_map_key="test-secret",

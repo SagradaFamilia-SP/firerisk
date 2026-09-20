@@ -124,7 +124,13 @@ class FirmsService:
 
         try:
             detections: list[FireDetection] = []
-            day_range = query.hours // 24
+            # FIRMS' `day_range` counts whole calendar days back from "today"
+            # in its own processing pipeline, not a rolling N*24h window: the
+            # current day's bucket is often still empty right after the UTC
+            # day boundary, before that day's satellite passes are processed.
+            # Requesting one extra day of raw data absorbs that gap; the exact
+            # `hours` cutoff below still trims the result to the real window.
+            day_range = query.hours // 24 + 1
             async with httpx.AsyncClient(timeout=20.0) as client:
                 for source in sorted(set(query.sources)):
                     for bounds in split_bounds(query.west, query.south, query.east, query.north):

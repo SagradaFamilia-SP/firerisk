@@ -1,6 +1,10 @@
 import type { FireDetection } from '../../types/api';
 
-export const FIRE_RENDER_LIMIT = 8000;
+// Fires render as raw Leaflet layers on the map's shared canvas renderer
+// (see FireCanvasLayer), not one React component each, so every real
+// detection can be shown — this is only a backstop against a truly
+// pathological response size, not a everyday sampling limit.
+export const FIRE_RENDER_LIMIT = 200_000;
 const GEOGRAPHIC_BUCKET_DEGREES = 5;
 
 /**

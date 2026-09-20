@@ -10,7 +10,7 @@ const dashboard = {
     data: { ok: true, model_online: false, models: [], configured_model: 'qwen' },
     error: null,
   } satisfies AsyncState<{ ok: boolean; model_online: boolean; models: string[]; configured_model: string }>,
-  layers: { fire: true, spread: true },
+  layers: { fire: true, spread: true, camera: true },
   toggleLayer: () => undefined,
 };
 
@@ -298,10 +298,11 @@ describe('AppShell tactical layout', () => {
     expect(screen.getByText('Capas operativas')).toBeInTheDocument();
     expect(screen.getByText('NASA FIRMS · VIIRS')).toBeInTheDocument();
     expect(screen.getByText('Propagación estimada')).toBeInTheDocument();
+    expect(screen.getByText('Detecciones por cámara')).toBeInTheDocument();
     expect(screen.getByText('Fuentes satelitales')).toBeInTheDocument();
     expect(screen.getByText('Mapa y visualización')).toBeInTheDocument();
     expect(screen.getByText('Alertas operativas')).toBeInTheDocument();
-    expect(screen.getByText('2/2')).toBeInTheDocument();
+    expect(screen.getByText('3/3')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar configuración' }));
     expect(screen.queryByRole('dialog', { name: 'Configuración operativa' })).not.toBeInTheDocument();

@@ -21,7 +21,7 @@ export function AboutPanel() {
           <span className="eyebrow">PYROS · Wildfire Intelligence</span>
           <h1>Detección, telemetría y simulación de incendios</h1>
         </div>
-        <span className="about-panel__version">v2.4.1</span>
+        <span className="about-panel__version">0.0.1</span>
       </header>
 
       <div className="about-panel__grid">

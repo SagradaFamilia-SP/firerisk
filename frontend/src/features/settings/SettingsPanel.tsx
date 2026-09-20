@@ -1,10 +1,11 @@
-import { Bell, Database, Flame, Gauge, Globe2, Map, Radar, Route, Satellite, SlidersHorizontal, X } from 'lucide-react';
+import { Bell, Camera, Database, Flame, Gauge, Globe2, Map, Radar, Route, Satellite, SlidersHorizontal, X } from 'lucide-react';
 
 import type { LayerKey } from '../../hooks/useDashboard';
 
 const layerItems: Array<{ id: LayerKey; label: string; icon: typeof Flame }> = [
   { id: 'fire', label: 'NASA FIRMS · VIIRS', icon: Flame },
   { id: 'spread', label: 'Propagación estimada', icon: Route },
+  { id: 'camera', label: 'Detecciones por cámara', icon: Camera },
 ];
 
 const configSections = [
@@ -69,7 +70,7 @@ export function SettingsPanel({ layers, onToggleLayer, onClose }: {
         <section className="settings-section settings-section--layers">
           <div className="settings-section__heading">
             <span><Radar size={18} /> Capas operativas</span>
-            <b>{activeLayerCount}/2</b>
+            <b>{activeLayerCount}/{layerItems.length}</b>
           </div>
           <div className="settings-layer-list">
             {layerItems.map(({ id, label, icon: Icon }) => (

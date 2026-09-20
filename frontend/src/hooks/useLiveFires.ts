@@ -69,14 +69,22 @@ export function useLiveFires() {
     if (lastRequest.current?.key === requestKey && Date.now() - lastRequest.current.requestedAt < 300_000) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      lastRequest.current = { key: requestKey, requestedAt: Date.now() };
       // Keep showing the previously loaded markers while the new viewport's
       // detections load, instead of flashing everything to empty on every
       // pan/zoom — they get replaced once the fresh batch actually arrives.
       setState((current) => ({ status: 'loading', data: current.data, error: null }));
       apiClient.fires(viewport, filters, controller.signal).then(
         (data) => {
-          if (!controller.signal.aborted) setState({ status: 'success', data, error: null });
+          if (controller.signal.aborted) return;
+          // Only a request that actually finished marks this viewport as
+          // "recently fetched". A large response (tens of thousands of real
+          // detections) can take over a second to arrive; if a later
+          // viewport/zoom event aborts it first, marking it done *before*
+          // that (as this used to) would wedge the map with zero markers for
+          // up to 5 minutes — the abort is silent, but the dedup cache still
+          // thought this exact viewport was already satisfied.
+          lastRequest.current = { key: requestKey, requestedAt: Date.now() };
+          setState({ status: 'success', data, error: null });
         },
         (error: unknown) => {
           if ((error as Error).name !== 'AbortError') {

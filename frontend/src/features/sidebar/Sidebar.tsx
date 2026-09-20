@@ -39,17 +39,17 @@ export function Sidebar({ collapsed, onCollapseToggle, activeModule, onSelectMod
           <span><Bot size={18} /><span className="module-item__text">Chat Asistente</span></span>{activeModule === 'chat' ? <b>ACTIVO</b> : <small>AI AGENT</small>}
         </button>
         <button type="button" className={`module-item ${activeModule === 'cameras' ? 'is-active' : ''}`} aria-current={activeModule === 'cameras' ? 'page' : undefined} onClick={() => onSelectModule('cameras')}>
-          <span><Camera size={18} /><span className="module-item__text">Cámaras</span></span>{activeModule === 'cameras' ? <b>ACTIVO</b> : <small>YOLO</small>}
+          <span><Camera size={18} /><span className="module-item__text">Cámaras</span></span>{activeModule === 'cameras' ? <b>ACTIVO</b> : <small>YOLO Vonage</small>}
         </button>
         <button type="button" className={`module-item ${activeModule === 'about' ? 'is-active' : ''}`} aria-current={activeModule === 'about' ? 'page' : undefined} onClick={() => onSelectModule('about')}>
-          <span><Info size={18} /><span className="module-item__text">About</span></span>{activeModule === 'about' ? <b>ACTIVO</b> : <small>v2.4.1</small>}
+          <span><Info size={18} /><span className="module-item__text">About</span></span>{activeModule === 'about' ? <b>ACTIVO</b> : <small>v0.0.1</small>}
         </button>
       </nav>
       <footer className="sidebar-profile">
-        <div className="sidebar-profile__avatar" aria-hidden="true">YK<i /></div>
+        <div className="sidebar-profile__avatar" aria-hidden="true">RF<i /></div>
         <div className="sidebar-profile__info">
-          <span><strong>Yasine K.</strong><b>L3</b></span>
-          <small>Operador Centro Mando</small>
+          <span><strong>Roger F.</strong><b>VIP</b></span>
+          <small>Admin</small>
         </div>
         <div className="sidebar-profile__actions">
           <button type="button" aria-label="Abrir configuración" onClick={onOpenSettings}><Settings size={16} /></button>

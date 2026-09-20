@@ -1,15 +1,10 @@
-import { CircleMarker, LayerGroup, Polygon, Popup, Tooltip } from 'react-leaflet';
+import { CircleMarker, LayerGroup, Polygon, Tooltip } from 'react-leaflet';
 
 import type { LayerKey } from '../../hooks/useDashboard';
 import type { FireSpread } from '../../hooks/useFireSpread';
 import type { CameraFireDetection, FireDetection } from '../../types/api';
 import { cameraDetectionId } from './cameraFireToDetection';
-
-const fireRadius = (fire: FireDetection, selected: boolean) => {
-  if (selected) return 9;
-  const frp = fire.frp ?? 0;
-  return Math.max(3.5, Math.min(7.5, 3.5 + Math.log10(frp + 1) * 2.3));
-};
+import { FireCanvasLayer } from './FireCanvasLayer';
 
 export function MapOverlays({ layers, fires, cameraFires, selectedFireId, onSelectFire, fireSpread }: {
   layers: Record<LayerKey, boolean>;
@@ -24,13 +19,7 @@ export function MapOverlays({ layers, fires, cameraFires, selectedFireId, onSele
     .filter((ring) => ring.length >= 3);
   return (
     <>
-      {layers.fire && <LayerGroup>{fires.map((fire) => <CircleMarker
-        key={fire.id}
-        center={[fire.latitude, fire.longitude]}
-        radius={fireRadius(fire, selectedFireId === fire.id)}
-        pathOptions={{ color: fire.confidence === 'high' ? '#ffe08a' : '#ff8b57', weight: selectedFireId === fire.id ? 3 : 1, fillColor: '#f0442f', fillOpacity: 0.82 }}
-        eventHandlers={{ click: () => onSelectFire(fire.id) }}
-      ><Tooltip direction="top">{fire.satellite} · {fire.confidence} · FRP {fire.frp?.toFixed(1) ?? '—'} MW</Tooltip><Popup><strong>Detección VIIRS real</strong><br />{new Date(fire.acquired_at).toLocaleString('es-ES')}<br />FRP: {fire.frp?.toFixed(1) ?? '—'} MW</Popup></CircleMarker>)}</LayerGroup>}
+      <FireCanvasLayer fires={fires} selectedFireId={selectedFireId} onSelectFire={onSelectFire} visible={layers.fire} />
       {layers.spread && fireRings.length > 0 && <LayerGroup>{fireRings.map((ring, index) => <Polygon key={index} positions={ring} pathOptions={{ color: '#ff2d1f', weight: 2.5, fillColor: '#ff5a3d', fillOpacity: 0.28 }}>
         <Tooltip>Propagación real (rejilla) · +{fireHour} h · radio máx {fireSnapshot?.radius_km_max.toFixed(2)} km</Tooltip>
       </Polygon>)}</LayerGroup>}

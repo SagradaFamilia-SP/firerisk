@@ -66,6 +66,43 @@ describe('useLiveFires', () => {
     expect(firstSignal?.aborted).toBe(true);
   });
 
+  it('retries the same viewport after an in-flight request for it gets aborted, instead of treating it as already fetched', async () => {
+    // Leaflet can re-emit the *same* bounding box more than once in a row
+    // (e.g. its own setup/resize handling) — each emission is still a new
+    // object, so the fetch effect reruns and aborts whatever was still in
+    // flight. A large response (tens of thousands of real detections) can
+    // easily take over a second to arrive, so it's realistic for a second or
+    // third same-viewport emission to abort it before it ever resolves.
+    const viewport = { west: -7, south: 39, east: -5, north: 41, zoom: 6 };
+    const neverSettles = new Promise<FireResponse>(() => undefined);
+    let resolveSecondAttempt: (value: FireResponse) => void = () => undefined;
+    const secondAttemptPending = new Promise<FireResponse>((resolve) => { resolveSecondAttempt = resolve; });
+    vi.mocked(apiClient.fires)
+      .mockReturnValueOnce(neverSettles)
+      .mockReturnValueOnce(secondAttemptPending)
+      .mockResolvedValueOnce(response);
+
+    const { result } = renderHook(() => useLiveFires());
+
+    act(() => result.current.updateViewport({ ...viewport }));
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    expect(apiClient.fires).toHaveBeenCalledTimes(1); // 1st attempt in flight, never resolves
+
+    act(() => result.current.updateViewport({ ...viewport })); // aborts the 1st attempt
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    expect(apiClient.fires).toHaveBeenCalledTimes(2); // 2nd attempt in flight, not yet resolved
+
+    act(() => result.current.updateViewport({ ...viewport })); // aborts the 2nd attempt mid-flight
+    await act(() => vi.advanceTimersByTimeAsync(350));
+    // The regression: the old code marked this exact viewport "fetched" the
+    // instant the 2nd attempt *started*, before it could finish — so this
+    // 3rd, identical-viewport request would have been silently skipped,
+    // permanently stuck with no data for up to 5 minutes.
+    expect(apiClient.fires).toHaveBeenCalledTimes(3);
+
+    await act(async () => resolveSecondAttempt(response)); // let the abandoned attempt settle harmlessly
+  });
+
   it('suppresses an unchanged request for five minutes', async () => {
     const { result } = renderHook(() => useLiveFires());
     const viewport = { west: -7, south: 39, east: -5, north: 41, zoom: 6 };

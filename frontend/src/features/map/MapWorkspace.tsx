@@ -22,6 +22,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread, cameraFires }: 
   const [streamOpen, setStreamOpen] = useState(false);
   const hasSelectedFire = Boolean(liveFires.selectedFireId);
   const selectedCameraFire = cameraFires.fires.find((fire) => cameraDetectionId(fire.id) === liveFires.selectedFireId) ?? null;
+  const sampledFires = sampleFiresForRender(liveFires.state.data?.detections ?? []);
 
   return (
     <div className="map-workspace">
@@ -30,7 +31,7 @@ export function MapWorkspace({ dashboard, liveFires, fireSpread, cameraFires }: 
         layers={dashboard.layers}
         baseMap={dashboard.baseMap}
         initialView={view}
-        fires={sampleFiresForRender(liveFires.state.data?.detections ?? [])}
+        fires={sampledFires}
         cameraFires={cameraFires.fires}
         selectedFireId={liveFires.selectedFireId}
         onSelectFire={liveFires.setSelectedFireId}

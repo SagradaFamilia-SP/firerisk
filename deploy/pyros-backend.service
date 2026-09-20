@@ -4,11 +4,14 @@ After=network.target
 
 [Service]
 Type=simple
-User=pyros
-Group=pyros
-WorkingDirectory=/var/www/pyros/backend
-EnvironmentFile=/var/www/pyros/backend/.env
-ExecStart=/var/www/pyros/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+# Match this to whoever owns the repo checkout on the actual server — using a
+# dedicated user means chown -R'ing wherever the repo happens to live, which
+# is unnecessary risk (e.g. don't chown a real login's home directory to it).
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/firerisk/backend
+EnvironmentFile=/home/ubuntu/firerisk/backend/.env
+ExecStart=/home/ubuntu/firerisk/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=3
 
